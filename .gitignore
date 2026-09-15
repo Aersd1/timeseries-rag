@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+native.dll
+native.so
+native.dylib
+results/
+my_csv/
+*.csv
+*.log
+.env
+.env.*
+environment-new-device.txt
