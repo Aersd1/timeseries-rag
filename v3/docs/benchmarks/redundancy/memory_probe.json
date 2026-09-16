@@ -1,0 +1,41 @@
+{
+  "measurement": "tracemalloc incremental peak after index ready; not process RSS; native untracked allocations may be excluded; no audit distance arrays",
+  "results": [
+    {
+      "initial": 128,
+      "current_traced_bytes": 427747,
+      "peak_traced_bytes": 809300,
+      "retained": 128,
+      "candidate_payload_cap_bytes": 196608,
+      "block_distances": 16384,
+      "complete": true
+    },
+    {
+      "initial": 512,
+      "current_traced_bytes": 397128,
+      "peak_traced_bytes": 799001,
+      "retained": 512,
+      "candidate_payload_cap_bytes": 196608,
+      "block_distances": 16384,
+      "complete": true
+    },
+    {
+      "initial": 2048,
+      "current_traced_bytes": 399984,
+      "peak_traced_bytes": 1102176,
+      "retained": 2048,
+      "candidate_payload_cap_bytes": 196608,
+      "block_distances": 16384,
+      "complete": true
+    },
+    {
+      "initial": 4384,
+      "current_traced_bytes": 399984,
+      "peak_traced_bytes": 1286880,
+      "retained": 4384,
+      "candidate_payload_cap_bytes": 196608,
+      "block_distances": 16384,
+      "complete": true
+    }
+  ]
+}
