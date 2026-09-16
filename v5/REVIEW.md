@@ -11,7 +11,7 @@
 
 `test_model.py` 检查 primitive 尾部 duration、段级因果性、平坦输入、五类任务及 VQ 梯度、KL 方向、随机未训练权重的序列化/建库/评估/打包。仅做 backward 梯度校验，**没有 optimizer.step**。随机权重生成的报告被标记为未训练，不能视为效果实验。
 
-分支包含 GitHub Actions CPU 检查 `.github/workflows/v5-tests.yml`，安装 CPU PyTorch 后运行全部测试。实际状态以该分支 Actions 记录为准；未完成的 CI 不等于通过。GPU、CUDA AMP、完整 epoch 训练和大数据吞吐必须在目标服务器验证。
+GitHub Actions CPU 检查已成功完成：[运行 35078485343](https://github.com/Aersd1/timeseries-rag/actions/runs/35078485343)，对应代码提交 `d93f4b4571f6229145338b513a42c7e1c85b43e2`。检查安装了 CPU PyTorch，运行全部 8 项测试，包括前向/反向和完整合成推理链路；没有正式训练。GPU、CUDA AMP、完整 epoch 训练和大数据吞吐必须在目标服务器验证。
 
 ## 已审查并修复的风险
 
