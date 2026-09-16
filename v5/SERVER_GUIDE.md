@@ -19,7 +19,7 @@ python v4/build_native.py
 python -m unittest discover -s v5/tests -v
 ```
 
-需要 Python 3.11 或更新的兼容环境、GCC、NumPy/SciPy/Pandas/Matplotlib、PyTorch 2.5+。本地测试未安装 PyTorch 时会跳过 3 个神经模块测试；**服务器测试应全部通过且不跳过**。这些测试只对合成数据做前向/反向和建库评估，没有 optimizer step，不是正式训练。CUDA 训练、AMP 和训练效果只能在服务器实测。
+需要 Python 3.11 或更新的兼容环境、GCC、NumPy/SciPy/Pandas/Matplotlib、PyTorch 2.5+。共 9 项检查：服务器上原 8 项 CPU/模型/集成测试应全部通过；新增 CUDA AMP 测试在 CPU 机器或空闲显存不足时允许跳过。未安装 PyTorch 时会跳过模型测试，不能据此认定服务器预检通过。测试只对合成数据做前向/反向和建库评估，没有 optimizer step，不是正式训练。已有 Windows conda tslib（PyTorch 2.5.1+cu124）通过记录见 REVIEW.md；完整训练仍需服务器实测。
 
 ## 2. 配置你的 CSV
 
