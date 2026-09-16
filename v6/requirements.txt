@@ -1,0 +1,6 @@
+# Install a suitable CPU/CUDA PyTorch wheel separately for the server.
+torch>=2.5,<3
+numpy>=1.26,<3
+scipy>=1.11,<2
+pandas>=2.0,<4
+matplotlib>=3.8,<4

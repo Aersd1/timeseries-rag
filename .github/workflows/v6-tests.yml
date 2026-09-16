@@ -1,0 +1,25 @@
+name: V6 correctness tests
+on:
+  push:
+    branches: [v6-bayesian-future-retrieval]
+    paths: ['v6/**', '.github/workflows/v6-tests.yml']
+  pull_request:
+    paths: ['v6/**', '.github/workflows/v6-tests.yml']
+jobs:
+  cpu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            v5
+            v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install numpy scipy pandas matplotlib
+      - run: python -m unittest discover -s v6/tests -v
+        env:
+          OMP_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
