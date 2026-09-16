@@ -1,0 +1,21 @@
+{
+  "version": 5,
+  "files": {
+    "REPORT.md": "bdfb52f0db33f4164ae297de705bcfec12b680a59765442bf2e57d34e7131ffa",
+    "analysis.json": "1166895dfacf38d8104624ff1db5eb1e771c2a898a6227d8821d181809d382f3",
+    "forecast_metrics.csv": "b1a797738ec38f0fef8e6e6ae0b3c576f62f1565b8209f98a65d2601d95692d1",
+    "retrieval_metrics.csv": "52d6c9119c4646e06f7e88837164fc81460f15da112c22e999497392accd791c",
+    "overview.png": "d99886512d07b6f67ae1deddb5560246c74b28f2c846826696aee9f161d75f96",
+    "forecasts.jsonl": "eb03e57bbce49e6b1640e332e1582a0c3f05be4080a19267fcb07e249ff06d9b",
+    "retrieval.jsonl": "500db92e9c8174b939e599690e1ff5d432eaf797f6e4704948969c76795bed86",
+    "timing.json": "a7003add47ae153b78f368150d26df6daf089c6aab1c807c9884f706335c54f2",
+    "run_public.json": "ada49d36c86fc6aece9cddcc92655e7f1d60200cbe4843a6a4f1ef55cfc2ae61",
+    "training_environment.json": "12f1298360d65ee6983024bf8ffcb44f391635341ef74eac84e7d19459ac1bcb",
+    "training_history.json": "b48eff335b9ad4d2776d1b414d98453709b0e2bc3db3c41e09a46bcb4a36b647"
+  },
+  "excludes": [
+    "raw data",
+    "weights",
+    "examples_private.json"
+  ]
+}

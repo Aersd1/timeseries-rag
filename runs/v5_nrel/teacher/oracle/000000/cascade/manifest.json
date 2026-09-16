@@ -1,0 +1,10 @@
+{
+  "base": "/ve-remi-dmz-dmz-sh-nas01/data/de_group/ghz_11401/windmllm_v2/timeseries-rag/runs/v5_nrel/teacher/oracle/000000/base",
+  "manifest_hash": "250a429f669a74958925c19a8b540611fef920b994de5ce7b2cafd6def4fc31f",
+  "long_size": 16384,
+  "mid_size": 1024,
+  "windows": 128241,
+  "blocks": 8,
+  "build_ms": 502.5365330511704,
+  "method": "4 six-symbol inverted tables, adjacent-bin probes, block vote, minimum symbol lower bound per middle block, exact ED"
+}

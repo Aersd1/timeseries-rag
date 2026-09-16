@@ -1,0 +1,141 @@
+{
+  "data_id": "6e2e11171e7f741a01b44f3537bdae94efa33f8b44f594a25f9a1ba71d417aec",
+  "config_hash": "e46b7b8218d9f596afb377c73b50c4f38af98111b602612420b7425d9f5d32af",
+  "version": 5,
+  "complete": true,
+  "shards": [
+    {
+      "path": "series_000000/train_000000.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 0
+    },
+    {
+      "path": "series_000000/train_000001.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 0
+    },
+    {
+      "path": "series_000000/train_000002.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 0
+    },
+    {
+      "path": "series_000000/validation_000003.npz",
+      "split": "validation",
+      "count": 12,
+      "sid": 0
+    },
+    {
+      "path": "series_000000/test_000004.npz",
+      "split": "test",
+      "count": 16,
+      "sid": 0
+    },
+    {
+      "path": "series_000001/train_000000.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 1
+    },
+    {
+      "path": "series_000001/train_000001.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 1
+    },
+    {
+      "path": "series_000001/train_000002.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 1
+    },
+    {
+      "path": "series_000001/validation_000003.npz",
+      "split": "validation",
+      "count": 12,
+      "sid": 1
+    },
+    {
+      "path": "series_000001/test_000004.npz",
+      "split": "test",
+      "count": 16,
+      "sid": 1
+    },
+    {
+      "path": "series_000002/train_000000.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 2
+    },
+    {
+      "path": "series_000002/train_000001.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 2
+    },
+    {
+      "path": "series_000002/train_000002.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 2
+    },
+    {
+      "path": "series_000002/validation_000003.npz",
+      "split": "validation",
+      "count": 12,
+      "sid": 2
+    },
+    {
+      "path": "series_000002/test_000004.npz",
+      "split": "test",
+      "count": 16,
+      "sid": 2
+    },
+    {
+      "path": "series_000003/train_000000.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 3
+    },
+    {
+      "path": "series_000003/train_000001.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 3
+    },
+    {
+      "path": "series_000003/train_000002.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 3
+    },
+    {
+      "path": "series_000003/validation_000003.npz",
+      "split": "validation",
+      "count": 12,
+      "sid": 3
+    },
+    {
+      "path": "series_000003/test_000004.npz",
+      "split": "test",
+      "count": 16,
+      "sid": 3
+    }
+  ],
+  "skipped": [],
+  "horizons": [
+    24,
+    96,
+    244
+  ],
+  "length": 244,
+  "counts": {
+    "train": 192,
+    "validation": 48,
+    "test": 64
+  },
+  "scope": "same logical series, fixed memory prefix, stride-1 exact V4 teacher; arbitrary equal-distance ties"
+}

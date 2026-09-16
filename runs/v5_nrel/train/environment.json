@@ -1,0 +1,10 @@
+{
+  "python": "3.11.14",
+  "platform": "Linux-5.4.250-9-velinux1u2-amd64-x86_64-with-glibc2.39",
+  "git_commit": "f213e198619780e040e4c109c90cfe2a7f0c2e8c",
+  "torch": "2.7.0+cu126",
+  "device": "cuda",
+  "gpu": "NVIDIA H20",
+  "parameters": 68824,
+  "data_id": "6e2e11171e7f741a01b44f3537bdae94efa33f8b44f594a25f9a1ba71d417aec"
+}

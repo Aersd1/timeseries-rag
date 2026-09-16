@@ -1,0 +1,29 @@
+{
+  "length": 244,
+  "pairs": 16,
+  "paa": 16,
+  "training": {
+    "samples": 2048,
+    "seed": 20260915,
+    "selected_frequencies": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "training_sha256": "1af79add1f302588beaa7e641553cbc2f635ba073cc8647575ff9b4baffff0dd",
+    "method": "variance-selected orthogonal Fourier pairs + learned quantile bins; fixed PAA safety channel"
+  }
+}

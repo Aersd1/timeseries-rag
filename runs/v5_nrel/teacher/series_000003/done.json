@@ -1,0 +1,35 @@
+{
+  "shards": [
+    {
+      "path": "series_000003/train_000000.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 3
+    },
+    {
+      "path": "series_000003/train_000001.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 3
+    },
+    {
+      "path": "series_000003/train_000002.npz",
+      "split": "train",
+      "count": 16,
+      "sid": 3
+    },
+    {
+      "path": "series_000003/validation_000003.npz",
+      "split": "validation",
+      "count": 12,
+      "sid": 3
+    },
+    {
+      "path": "series_000003/test_000004.npz",
+      "split": "test",
+      "count": 16,
+      "sid": 3
+    }
+  ],
+  "skipped": []
+}

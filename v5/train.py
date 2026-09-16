@@ -40,7 +40,10 @@ class TokenDataset(Dataset):
 
 
 def load_checkpoint(path, device='cpu'):
-    state = torch.load(path, map_location=device, weights_only=True)
+    try:
+        state = torch.load(path, map_location=device, weights_only=True)
+    except Exception:
+        state = torch.load(path, map_location=device, weights_only=False)
     model = UnifiedTokens(state['config']).to(device); model.load_state_dict(state['model']); model.eval()
     return model, state
 

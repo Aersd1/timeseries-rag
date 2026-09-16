@@ -1,0 +1,94 @@
+{
+  "version": 5,
+  "complete": true,
+  "dtype": "<f4",
+  "series": [
+    {
+      "sid": 0,
+      "file": "values/000000.bin",
+      "source": "/ve-remi-dmz-dmz-sh-nas01/data/de_group/ghz_11401/data/wind_timeseries/NREL/raw_5min_dropzero1000/NREL_WTK_site101275_SouthDakota-Deuel_class2_16MW_2007-2013_5min.csv",
+      "column": "power",
+      "device": null,
+      "group": "NREL",
+      "n": 511011,
+      "values_sha256": "297a50fd7e3ba3c8a46b346824ba9614a603994bd55b4ccb78397f49311051d5",
+      "runs": [
+        [
+          0,
+          511011
+        ]
+      ],
+      "memory_end": 127752,
+      "train_end": 306606,
+      "validation_end": 408808,
+      "memory_mean": 8.19481299481004,
+      "memory_std": 5.958362211280063
+    },
+    {
+      "sid": 1,
+      "file": "values/000001.bin",
+      "source": "/ve-remi-dmz-dmz-sh-nas01/data/de_group/ghz_11401/data/wind_timeseries/NREL/raw_5min_dropzero1000/NREL_WTK_site102811_NewYork-Albany_class2_16MW_2007-2013_5min.csv",
+      "column": "power",
+      "device": null,
+      "group": "NREL",
+      "n": 582008,
+      "values_sha256": "b5991d877e96d2924f121358970cd566d96112bfd1f19242eb2fc9ebc3384403",
+      "runs": [
+        [
+          0,
+          582008
+        ]
+      ],
+      "memory_end": 145502,
+      "train_end": 349204,
+      "validation_end": 465606,
+      "memory_mean": 8.48888594221164,
+      "memory_std": 6.118996470308567
+    },
+    {
+      "sid": 2,
+      "file": "values/000002.bin",
+      "source": "/ve-remi-dmz-dmz-sh-nas01/data/de_group/ghz_11401/data/wind_timeseries/NREL/raw_5min_dropzero1000/NREL_WTK_site10444_NewMexico-Eddy_class1_16MW_2007-2013_5min.csv",
+      "column": "power",
+      "device": null,
+      "group": "NREL",
+      "n": 566142,
+      "values_sha256": "4d94bc4cfa8d9be99eda4d74d4a87b861a6ef19ca526ff40a07348a4585a2fa0",
+      "runs": [
+        [
+          0,
+          566142
+        ]
+      ],
+      "memory_end": 141535,
+      "train_end": 339685,
+      "validation_end": 452913,
+      "memory_mean": 6.760659260713775,
+      "memory_std": 5.681096594152679
+    },
+    {
+      "sid": 3,
+      "file": "values/000003.bin",
+      "source": "/ve-remi-dmz-dmz-sh-nas01/data/de_group/ghz_11401/data/wind_timeseries/NREL/raw_5min_dropzero1000/NREL_WTK_site110192_Minnesota-Benton_class3_16MW_2007-2013_5min.csv",
+      "column": "power",
+      "device": null,
+      "group": "NREL",
+      "n": 736416,
+      "values_sha256": "ad8209efe70829c5074f430e57543aa49803c4129d8b3146199352da5cc8194d",
+      "runs": [
+        [
+          0,
+          736416
+        ]
+      ],
+      "memory_end": 184104,
+      "train_end": 441849,
+      "validation_end": 589132,
+      "memory_mean": 7.568606321920611,
+      "memory_std": 5.775453795800029
+    }
+  ],
+  "config_hash": "e46b7b8218d9f596afb377c73b50c4f38af98111b602612420b7425d9f5d32af",
+  "total_points": 2395577,
+  "data_id": "6e2e11171e7f741a01b44f3537bdae94efa33f8b44f594a25f9a1ba71d417aec"
+}
