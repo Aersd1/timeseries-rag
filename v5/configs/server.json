@@ -1,0 +1,26 @@
+{
+  "version": 5,
+  "seed": 20260916,
+  "length": 244,
+  "horizons": [24, 96, 244],
+  "data": {
+    "chunk_rows": 100000,
+    "sources": [
+      {"glob": "/data/my_dataset/*.csv", "columns": ["value"], "time_column": "timestamp", "time_kind": "datetime", "group": "my_dataset"}
+    ]
+  },
+  "split": {"memory": 0.25, "train": 0.60, "validation": 0.80},
+  "teacher": {
+    "neighbors": 256,
+    "chunk_points": 32768,
+    "max_points_per_series": 2000000,
+    "queries_per_series": {"train": 2000, "validation": 200, "test": 200},
+    "shard_queries": 32
+  },
+  "model": {"primitive": 4, "vocab": 256, "dim": 32, "hidden": 64, "commitment": 0.25},
+  "temperatures": {"shape": 1.0, "future": 1.0, "student": 0.1, "assignment": 0.5},
+  "loss_weights": {"rate": 0.001, "reconstruction": 0.1, "retrieval": 1.0, "future": 1.0, "forecast": 1.0, "vq": 1.0},
+  "training": {"epochs": 30, "batch_size": 2, "candidates": 64, "lr": 0.0003, "weight_decay": 0.0001, "clip_grad": 1.0, "amp": true},
+  "index": {"stride": 16, "batch_size": 128, "max_windows_per_series": 200000},
+  "evaluation": {"topk": [10, 100, 1000], "candidate_fraction": 0.01, "analog_k": 16, "max_examples": 0}
+}
