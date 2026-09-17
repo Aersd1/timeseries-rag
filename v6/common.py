@@ -26,6 +26,16 @@ def config(path):
             raise ValueError(key)
     if c['model'].get('belief_signature','components') not in ('components','cdf'):
         raise ValueError('Unknown belief signature')
+    if c['model'].get('backbone','cnn') not in ('cnn','patchtst'):
+        raise ValueError('Unknown backbone')
+    if c['model'].get('backbone','cnn') == 'patchtst':
+        for key in ('patch_len','patch_stride','n_heads','e_layers'):
+            if c['model'].get(key, 1) < 1:
+                raise ValueError(key)
+        if c['model']['hidden'] % c['model'].get('n_heads', 4):
+            raise ValueError('hidden must be divisible by n_heads')
+        if c['length'] < c['model'].get('patch_len', 16):
+            raise ValueError('history shorter than patch_len')
     if not 0 <= c['training'].get('distribution_teacher_weight',0) <= 1:
         raise ValueError('Invalid distribution teacher weight')
     if any(c['training'].get(k,0)<0 for k in ('variance_weight','covariance_weight','history_teacher_weight','history_reconstruction_weight')):

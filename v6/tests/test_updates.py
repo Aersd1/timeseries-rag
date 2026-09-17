@@ -64,6 +64,37 @@ class UpdateTests(unittest.TestCase):
         torch.testing.assert_close(a,b)
         self.assertFalse(torch.allclose(signature(p,mu,sd,3),signature(p[:,permutation],mu[:,permutation],sd[:,permutation],3)))
 
+    def test_patchtst_direct_forecast_uses_history_only(self):
+        from v6.patchtst_direct import PatchTSTForecast, forecast_loss
+        c=small_config()
+        c['model'].update(backbone='patchtst', patch_len=8, patch_stride=4, n_heads=2, e_layers=1, dropout=0.)
+        model=PatchTSTForecast(c)
+        x=torch.randn(6,40); floor=torch.full((6,),.1); y=torch.randn(6,16)
+        out=model(x,floor)
+        self.assertEqual(tuple(out['raw'].shape),(6,16))
+        loss,_=forecast_loss(model,dict(x=x,y=y,floor=floor))
+        self.assertTrue(torch.isfinite(loss))
+        model.eval()
+        with torch.no_grad():
+            a=model(x,floor)['raw']
+            b=model(x,floor)['raw']
+        torch.testing.assert_close(a,b)
+
+    def test_score_prediction_matches_evaluate_denominators(self):
+        from v6.patchtst_direct import instance_scale, score_prediction
+        x=np.array([0.,2.,4.,6.],dtype=float); y=np.array([8.,10.],dtype=float)
+        pred=np.array([7.,11.],dtype=float); floor=0.5; memory_std=2.
+        scale=instance_scale(x,floor)
+        self.assertAlmostEqual(scale, float(x.std()))
+        self.assertEqual(instance_scale(np.zeros(4),floor), floor)
+        row=score_prediction(pred,y,x,floor,memory_std,[2],0,0,'m')[0]
+        z_pred=(pred-x.mean())/scale; z_y=(y-x.mean())/scale
+        mse_z=float(np.mean((z_pred-z_y)**2))
+        self.assertAlmostEqual(row['mse_z'], mse_z)
+        self.assertAlmostEqual(row['history_nmse'], mse_z)
+        self.assertAlmostEqual(row['mse'], float(np.mean((pred-y)**2)))
+        self.assertAlmostEqual(row['nmse'], row['mse']/memory_std**2)
+
     def test_bounded_candidates_global_ties(self):
         rng=np.random.default_rng(36); best=Candidates(31)
         ds=rng.integers(0,8,600).astype(float); ss=rng.integers(0,5,600); starts=np.arange(600)
@@ -109,6 +140,24 @@ class UpdateTests(unittest.TestCase):
             np.testing.assert_allclose(apply(fitted,forecasts),target,atol=1e-6)
             with self.assertRaisesRegex(ValueError,'index_sha256'): check(fitted,'d','w','other',c,'learned_leaves0')
             with self.assertRaisesRegex(ValueError,'method'): check(fitted,'d','w','i',c,'learned_leaves128')
+
+    def test_patchtst_backbone_shapes_and_no_future_input(self):
+        from v6.model import make_backbone, BeliefEncoder, encoder_loss
+        c=small_config()
+        c['model'].update(backbone='patchtst', patch_len=8, patch_stride=4, n_heads=2, e_layers=1, dropout=0.)
+        x=torch.randn(6,40); net=make_backbone(c)
+        self.assertEqual(tuple(net(x).shape),(6,c['model']['hidden']))
+        model=BeliefEncoder(c)
+        batch=dict(x=x,y=torch.randn(6,16),floor=torch.full((6,),.1),
+                   sid=torch.arange(6),start=torch.arange(6)*80)
+        loss,_=encoder_loss(model,batch)
+        self.assertTrue(torch.isfinite(loss))
+        model.eval()
+        with torch.no_grad():
+            a=model(batch['x'],batch['floor'])['learned']
+            batch['y']=batch['y']*100
+            b=model(batch['x'],batch['floor'])['learned']
+        self.assertTrue(torch.equal(a,b))
 
 
 if __name__=='__main__': unittest.main()

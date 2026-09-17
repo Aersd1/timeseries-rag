@@ -1,0 +1,101 @@
+{
+  "version": 6,
+  "split": "test",
+  "complete": true,
+  "queries": 64,
+  "config": {
+    "version": 6,
+    "seed": 20260916,
+    "length": 244,
+    "horizons": [
+      24,
+      96,
+      244
+    ],
+    "split": {
+      "memory": 0.25,
+      "train": 0.6,
+      "validation": 0.8
+    },
+    "normalization": {
+      "memory_std_floor": 0.1
+    },
+    "model": {
+      "hidden": 64,
+      "dim": 32,
+      "components": 4,
+      "belief_bins": 8,
+      "history_bins": 32,
+      "use_belief": true,
+      "belief_signature": "cdf",
+      "history_reconstruction": true
+    },
+    "training": {
+      "prior_epochs": 16,
+      "encoder_epochs": 16,
+      "batch_size": 32,
+      "samples_per_series": 512,
+      "sample_stride": 32,
+      "lr": 0.0003,
+      "weight_decay": 0.0001,
+      "amp": false,
+      "temperature": 0.1,
+      "target_temperature": 1.0,
+      "future_weight": 1.0,
+      "belief_weight": 0.2,
+      "distribution_teacher_weight": 0.2,
+      "variance_weight": 1.0,
+      "covariance_weight": 0.05,
+      "prior_multi_horizon": true,
+      "history_teacher_weight": 1.0,
+      "history_reconstruction_weight": 0.5,
+      "history_neighbor_batches": true,
+      "history_neighbor_fraction": 0.5
+    },
+    "index": {
+      "stride": 1,
+      "leaf_size": 256,
+      "fanout": 16,
+      "shard_windows": 100000,
+      "batch_size": 256,
+      "channels": [
+        "learned",
+        "joint"
+      ],
+      "oversample": 512,
+      "layout": "spatial",
+      "joint_history_weight": 0.5
+    },
+    "evaluation": {
+      "queries_per_series": 16,
+      "k": 10,
+      "scope": "series",
+      "leaf_budgets": [
+        0
+      ],
+      "time_budget_ms": 0,
+      "audit_queries": 0,
+      "max_examples": 6,
+      "bootstrap_samples": 1000,
+      "history_max_nmse": 0.5
+    }
+  },
+  "data_id": "6e2e11171e7f741a01b44f3537bdae94efa33f8b44f594a25f9a1ba71d417aec",
+  "checkpoint_sha256": "900fadc1d50a6ff7880ecf4277593c7fed0e1dcf64a77b90e5e781c88dbca6d8",
+  "index_sha256": "f007d8be72fea40cfe94a923ae72e46b66b3c9f863fafe58e3807da8e449f20b",
+  "fusion": null,
+  "checkpoint_epoch": 13,
+  "index_windows": 596945,
+  "index_bytes": 544002376,
+  "environment": {
+    "python": "3.11.14",
+    "platform": "Linux-5.4.250-9-velinux1u2-amd64-x86_64-with-glibc2.39",
+    "git_commit": "2becff3ab4c5216d404fcd6c460e195423994c9b"
+  },
+  "timing_note": "Independent encode+search+candidate fetch per method; process/model startup excluded. First query marked.",
+  "causal_scope": "per-series chronology; cross-series calendar alignment is NOT verified",
+  "embedding_diagnostics": {
+    "mean_dimension_std": 0.09093051021673682,
+    "effective_rank": 4.561968333431971
+  }
+}

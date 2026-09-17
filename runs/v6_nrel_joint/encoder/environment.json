@@ -1,0 +1,9 @@
+{
+  "python": "3.11.14",
+  "platform": "Linux-5.4.250-9-velinux1u2-amd64-x86_64-with-glibc2.39",
+  "git_commit": "2becff3ab4c5216d404fcd6c460e195423994c9b",
+  "torch": "2.7.0+cu126",
+  "device": "cuda",
+  "train_windows": 2048,
+  "validation_windows": 64
+}

@@ -1,0 +1,50 @@
+[
+  {
+    "query": "q01",
+    "sid": 0,
+    "start": 414664,
+    "direct_mse_z": 3.86105164992777,
+    "joint_mse_z": 1.8826317028261712,
+    "persistence_mse_z": 1.6599463171453722e-06
+  },
+  {
+    "query": "q02",
+    "sid": 0,
+    "start": 428328,
+    "direct_mse_z": 2.3684674313436873,
+    "joint_mse_z": 1.1825231426513432,
+    "persistence_mse_z": 5.737441127635725
+  },
+  {
+    "query": "q03",
+    "sid": 1,
+    "start": 477806,
+    "direct_mse_z": 2.6325336037846236,
+    "joint_mse_z": 5.489443054779832,
+    "persistence_mse_z": 3.1577777223504384
+  },
+  {
+    "query": "q04",
+    "sid": 1,
+    "start": 494398,
+    "direct_mse_z": 0.5530969147703801,
+    "joint_mse_z": 1.8659867765365987,
+    "persistence_mse_z": 0.02937471972021593
+  },
+  {
+    "query": "q05",
+    "sid": 2,
+    "start": 453401,
+    "direct_mse_z": 0.43430302409246474,
+    "joint_mse_z": 0.9320530793555218,
+    "persistence_mse_z": 0.0001483160660009021
+  },
+  {
+    "query": "q06",
+    "sid": 2,
+    "start": 469505,
+    "direct_mse_z": 0.4771047134587988,
+    "joint_mse_z": 0.30320472621858563,
+    "persistence_mse_z": 0.296434886794157
+  }
+]

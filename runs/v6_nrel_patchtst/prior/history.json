@@ -1,0 +1,98 @@
+[
+  {
+    "epoch": 0,
+    "validation_objective": 2.64430832862854,
+    "seconds": 1.7147250340785831,
+    "nll_per_point": 3.9499111473560333
+  },
+  {
+    "epoch": 1,
+    "validation_objective": 1.562965452671051,
+    "seconds": 1.121295394957997,
+    "nll_per_point": 1.7136981002986431
+  },
+  {
+    "epoch": 2,
+    "validation_objective": 1.3811668753623962,
+    "seconds": 1.1224838769994676,
+    "nll_per_point": 1.2984380507841706
+  },
+  {
+    "epoch": 3,
+    "validation_objective": 1.3206944465637207,
+    "seconds": 1.132517186109908,
+    "nll_per_point": 1.1902578892186284
+  },
+  {
+    "epoch": 4,
+    "validation_objective": 1.2777100801467896,
+    "seconds": 1.1375272349687293,
+    "nll_per_point": 1.1499465983361006
+  },
+  {
+    "epoch": 5,
+    "validation_objective": 1.2802044749259949,
+    "seconds": 1.1633719290839508,
+    "nll_per_point": 1.1271978979930282
+  },
+  {
+    "epoch": 6,
+    "validation_objective": 1.265466570854187,
+    "seconds": 1.1915012180106714,
+    "nll_per_point": 1.1150506418198347
+  },
+  {
+    "epoch": 7,
+    "validation_objective": 1.2849737405776978,
+    "seconds": 1.1675417630467564,
+    "nll_per_point": 1.105066666379571
+  },
+  {
+    "epoch": 8,
+    "validation_objective": 1.2592107057571411,
+    "seconds": 1.1224209379870445,
+    "nll_per_point": 1.0994370793923736
+  },
+  {
+    "epoch": 9,
+    "validation_objective": 1.2426199316978455,
+    "seconds": 1.1488929440965876,
+    "nll_per_point": 1.090760531835258
+  },
+  {
+    "epoch": 10,
+    "validation_objective": 1.226363718509674,
+    "seconds": 1.1420311969704926,
+    "nll_per_point": 1.0835218410938978
+  },
+  {
+    "epoch": 11,
+    "validation_objective": 1.2128551006317139,
+    "seconds": 1.1341881329426542,
+    "nll_per_point": 1.076041872613132
+  },
+  {
+    "epoch": 12,
+    "validation_objective": 1.1845377683639526,
+    "seconds": 1.137360790045932,
+    "nll_per_point": 1.0671302443370223
+  },
+  {
+    "epoch": 13,
+    "validation_objective": 1.1741084456443787,
+    "seconds": 1.140299503924325,
+    "nll_per_point": 1.0540262116119266
+  },
+  {
+    "epoch": 14,
+    "validation_objective": 1.164124608039856,
+    "seconds": 1.1412526790518314,
+    "nll_per_point": 1.043507182970643
+  },
+  {
+    "epoch": 15,
+    "validation_objective": 1.1539546251296997,
+    "seconds": 1.141204848070629,
+    "nll_per_point": 1.0335664125159383
+  }
+]

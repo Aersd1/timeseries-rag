@@ -55,13 +55,55 @@ class Backbone(nn.Module):
         return F.gelu(self.readout(F.adaptive_avg_pool1d(self.net(x[:, None]), 4).flatten(1)))
 
 
+class PatchTSTBackbone(nn.Module):
+    """Univariate PatchTST encoder (Nie et al. 2023): patches -> Transformer -> pooled vector.
+
+    Used as a history encoder for prior/retrieval, not a standalone forecast head.
+    """
+    def __init__(self, length, hidden, patch_len=16, stride=8, n_heads=4, e_layers=2, dropout=0.1):
+        super().__init__()
+        if patch_len < 1 or stride < 1 or e_layers < 1 or n_heads < 1:
+            raise ValueError('Invalid PatchTST sizes')
+        if hidden % n_heads:
+            raise ValueError('hidden must be divisible by n_heads')
+        self.patch_len, self.stride = patch_len, stride
+        self.n = 1 if length <= patch_len else 1 + math.ceil((length - patch_len) / stride)
+        self.proj = nn.Linear(patch_len, hidden)
+        self.pos = nn.Parameter(torch.randn(1, self.n, hidden) * 0.02)
+        layer = nn.TransformerEncoderLayer(d_model=hidden, nhead=n_heads, dim_feedforward=max(hidden * 2, 32),
+                                           dropout=dropout, activation='gelu', batch_first=True, norm_first=True)
+        self.encoder = nn.TransformerEncoder(layer, num_layers=e_layers)
+        self.norm = nn.LayerNorm(hidden)
+
+    def forward(self, x):
+        x = x.float()
+        span = self.patch_len + (self.n - 1) * self.stride
+        if x.shape[-1] < span:
+            x = F.pad(x, (0, span - x.shape[-1]))
+        patches = x.unfold(-1, self.patch_len, self.stride)
+        if patches.shape[1] != self.n:
+            raise ValueError('Patch count mismatch')
+        return self.norm(self.encoder(self.proj(patches) + self.pos)).mean(1)
+
+
+def make_backbone(c):
+    m = c['model']
+    kind = m.get('backbone', 'cnn')
+    if kind == 'cnn':
+        return Backbone(m['hidden'])
+    if kind == 'patchtst':
+        return PatchTSTBackbone(c['length'], m['hidden'], m.get('patch_len', 16), m.get('patch_stride', 8),
+                                m.get('n_heads', 4), m.get('e_layers', 2), m.get('dropout', 0.1))
+    raise ValueError('Unknown backbone')
+
+
 class FuturePrior(nn.Module):
     def __init__(self, c):
         super().__init__()
         self.c = c
         h, k, width = max(c['horizons']), c['model']['components'], c['model']['hidden']
         self.h, self.k = h, k
-        self.backbone = Backbone(width)
+        self.backbone = make_backbone(c)
         self.head = nn.Linear(width, k * (1 + 2 * h))
 
     def forward(self, x, floor):
@@ -108,7 +150,7 @@ class BeliefEncoder(nn.Module):
         self.prior.requires_grad_(False)
         width, dim = c['model']['hidden'], c['model']['dim']
         signature_dim = belief_dim(c)
-        self.backbone = Backbone(width)
+        self.backbone = make_backbone(c)
         self.use_belief = c['model'].get('use_belief', True)
         self.readout = nn.Sequential(nn.Linear(width + (signature_dim if self.use_belief else 0), width),
                                      nn.GELU(), nn.Linear(width, dim))

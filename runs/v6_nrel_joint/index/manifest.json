@@ -1,0 +1,377 @@
+{
+  "version": 6,
+  "complete": true,
+  "data_id": "6e2e11171e7f741a01b44f3537bdae94efa33f8b44f594a25f9a1ba71d417aec",
+  "checkpoint_sha256": "900fadc1d50a6ff7880ecf4277593c7fed0e1dcf64a77b90e5e781c88dbca6d8",
+  "config": {
+    "version": 6,
+    "seed": 20260916,
+    "length": 244,
+    "horizons": [
+      24,
+      96,
+      244
+    ],
+    "data": {
+      "chunk_rows": 100000,
+      "sources": [
+        {
+          "glob": "/ve-remi-dmz-dmz-sh-nas01/data/de_group/ghz_11401/data/wind_timeseries/NREL/raw_5min_dropzero1000/NREL_WTK_site101275_*.csv",
+          "columns": [
+            "power"
+          ],
+          "time_column": "timestamp",
+          "time_kind": "datetime",
+          "group": "NREL"
+        },
+        {
+          "glob": "/ve-remi-dmz-dmz-sh-nas01/data/de_group/ghz_11401/data/wind_timeseries/NREL/raw_5min_dropzero1000/NREL_WTK_site102811_*.csv",
+          "columns": [
+            "power"
+          ],
+          "time_column": "timestamp",
+          "time_kind": "datetime",
+          "group": "NREL"
+        },
+        {
+          "glob": "/ve-remi-dmz-dmz-sh-nas01/data/de_group/ghz_11401/data/wind_timeseries/NREL/raw_5min_dropzero1000/NREL_WTK_site10444_*.csv",
+          "columns": [
+            "power"
+          ],
+          "time_column": "timestamp",
+          "time_kind": "datetime",
+          "group": "NREL"
+        },
+        {
+          "glob": "/ve-remi-dmz-dmz-sh-nas01/data/de_group/ghz_11401/data/wind_timeseries/NREL/raw_5min_dropzero1000/NREL_WTK_site110192_*.csv",
+          "columns": [
+            "power"
+          ],
+          "time_column": "timestamp",
+          "time_kind": "datetime",
+          "group": "NREL"
+        }
+      ]
+    },
+    "split": {
+      "memory": 0.25,
+      "train": 0.6,
+      "validation": 0.8
+    },
+    "normalization": {
+      "memory_std_floor": 0.1
+    },
+    "model": {
+      "hidden": 64,
+      "dim": 32,
+      "components": 4,
+      "belief_bins": 8,
+      "history_bins": 32,
+      "use_belief": true,
+      "belief_signature": "cdf",
+      "history_reconstruction": true
+    },
+    "training": {
+      "prior_epochs": 16,
+      "encoder_epochs": 16,
+      "batch_size": 32,
+      "samples_per_series": 512,
+      "sample_stride": 32,
+      "lr": 0.0003,
+      "weight_decay": 0.0001,
+      "amp": false,
+      "temperature": 0.1,
+      "target_temperature": 1.0,
+      "future_weight": 1.0,
+      "belief_weight": 0.2,
+      "distribution_teacher_weight": 0.2,
+      "variance_weight": 1.0,
+      "covariance_weight": 0.05,
+      "prior_multi_horizon": true,
+      "history_teacher_weight": 1.0,
+      "history_reconstruction_weight": 0.5,
+      "history_neighbor_batches": true,
+      "history_neighbor_fraction": 0.5
+    },
+    "index": {
+      "stride": 1,
+      "leaf_size": 256,
+      "fanout": 16,
+      "shard_windows": 100000,
+      "batch_size": 256,
+      "channels": [
+        "learned",
+        "history",
+        "belief",
+        "joint"
+      ],
+      "oversample": 512,
+      "layout": "spatial",
+      "joint_history_weight": 0.5
+    },
+    "evaluation": {
+      "queries_per_series": 16,
+      "k": 10,
+      "scope": "series",
+      "leaf_budgets": [
+        0
+      ],
+      "time_budget_ms": 0,
+      "audit_queries": 4,
+      "max_examples": 6,
+      "bootstrap_samples": 1000,
+      "history_max_nmse": 0.5
+    }
+  },
+  "shards": [
+    {
+      "path": "000000",
+      "sid": 0,
+      "group": "NREL",
+      "n": 100000,
+      "levels": {
+        "learned": [
+          391,
+          25,
+          2,
+          1
+        ],
+        "history": [
+          391,
+          25,
+          2,
+          1
+        ],
+        "belief": [
+          391,
+          25,
+          2,
+          1
+        ],
+        "joint": [
+          391,
+          25,
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "path": "000001",
+      "sid": 0,
+      "group": "NREL",
+      "n": 27265,
+      "levels": {
+        "learned": [
+          107,
+          7,
+          1
+        ],
+        "history": [
+          107,
+          7,
+          1
+        ],
+        "belief": [
+          107,
+          7,
+          1
+        ],
+        "joint": [
+          107,
+          7,
+          1
+        ]
+      }
+    },
+    {
+      "path": "000002",
+      "sid": 1,
+      "group": "NREL",
+      "n": 100000,
+      "levels": {
+        "learned": [
+          391,
+          25,
+          2,
+          1
+        ],
+        "history": [
+          391,
+          25,
+          2,
+          1
+        ],
+        "belief": [
+          391,
+          25,
+          2,
+          1
+        ],
+        "joint": [
+          391,
+          25,
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "path": "000003",
+      "sid": 1,
+      "group": "NREL",
+      "n": 45015,
+      "levels": {
+        "learned": [
+          176,
+          11,
+          1
+        ],
+        "history": [
+          176,
+          11,
+          1
+        ],
+        "belief": [
+          176,
+          11,
+          1
+        ],
+        "joint": [
+          176,
+          11,
+          1
+        ]
+      }
+    },
+    {
+      "path": "000004",
+      "sid": 2,
+      "group": "NREL",
+      "n": 100000,
+      "levels": {
+        "learned": [
+          391,
+          25,
+          2,
+          1
+        ],
+        "history": [
+          391,
+          25,
+          2,
+          1
+        ],
+        "belief": [
+          391,
+          25,
+          2,
+          1
+        ],
+        "joint": [
+          391,
+          25,
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "path": "000005",
+      "sid": 2,
+      "group": "NREL",
+      "n": 41048,
+      "levels": {
+        "learned": [
+          161,
+          11,
+          1
+        ],
+        "history": [
+          161,
+          11,
+          1
+        ],
+        "belief": [
+          161,
+          11,
+          1
+        ],
+        "joint": [
+          161,
+          11,
+          1
+        ]
+      }
+    },
+    {
+      "path": "000006",
+      "sid": 3,
+      "group": "NREL",
+      "n": 100000,
+      "levels": {
+        "learned": [
+          391,
+          25,
+          2,
+          1
+        ],
+        "history": [
+          391,
+          25,
+          2,
+          1
+        ],
+        "belief": [
+          391,
+          25,
+          2,
+          1
+        ],
+        "joint": [
+          391,
+          25,
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "path": "000007",
+      "sid": 3,
+      "group": "NREL",
+      "n": 83617,
+      "levels": {
+        "learned": [
+          327,
+          21,
+          2,
+          1
+        ],
+        "history": [
+          327,
+          21,
+          2,
+          1
+        ],
+        "belief": [
+          327,
+          21,
+          2,
+          1
+        ],
+        "joint": [
+          327,
+          21,
+          2,
+          1
+        ]
+      }
+    }
+  ],
+  "windows": 596945,
+  "raw_points": 2395577,
+  "layout": "spatial",
+  "build_seconds": 17.395190762938,
+  "payload_bytes": 544002376
+}
