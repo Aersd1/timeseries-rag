@@ -176,12 +176,14 @@ def lower_bound(q, lo, hi):
 
 
 def diverse(hits, k, length):
-    selected = []
-    for hit in hits:
-        if all(hit['sid'] != old['sid'] or abs(hit['start']-old['start']) >= length for old in selected):
-            selected.append(hit)
-            if len(selected) == k:
-                break
+    if not hits: return []
+    sids=np.array([hit['sid'] for hit in hits],dtype=np.int64)
+    starts=np.array([hit['start'] for hit in hits],dtype=np.int64)
+    available=np.ones(len(hits),dtype=bool); selected=[]
+    for _ in range(k):
+        if not available.any(): break
+        i=int(available.argmax()); selected.append(hits[i])
+        available &= ~((sids==sids[i]) & (np.abs(starts-starts[i])<length))
     return selected
 
 
@@ -213,7 +215,8 @@ class Candidates:
 
     def hits(self):
         order=np.lexsort((self.starts,self.sids,self.distances))
-        return [dict(distance=float(self.distances[i]),sid=int(self.sids[i]),start=int(self.starts[i])) for i in order]
+        return [dict(distance=d,sid=s,start=p) for d,s,p in zip(
+            self.distances[order].tolist(),self.sids[order].tolist(),self.starts[order].tolist())]
 
     def __len__(self): return len(self.distances)
 
@@ -224,6 +227,16 @@ class Library:
         if self.meta.get('version') != 6 or not self.meta['complete']:
             raise ValueError('Incomplete or incompatible index')
         self.c = self.meta['config']; self.cache = OrderedDict(); self.cache_size = cache_size
+        self.geometry = {}
+
+    def node_boxes(self, shard, channel):
+        """Resident small float64 geometry, not a resident copy of all embeddings."""
+        key=(shard,channel)
+        if key not in self.geometry:
+            self.geometry[key]=[(np.asarray(self.array(shard,f'{channel}/lo{level}.npy'),dtype=np.float64),
+                                 np.asarray(self.array(shard,f'{channel}/hi{level}.npy'),dtype=np.float64))
+                                for level in range(len(self.meta['shards'][shard]['levels'][channel]))]
+        return self.geometry[key]
 
     def array(self, shard, file):
         key = (shard, file)
@@ -237,9 +250,11 @@ class Library:
 
     def close(self):
         self.cache.clear()
+        self.geometry.clear()
 
     def search(self, query, channel='learned', k=10, sid=None, group=None, query_start=None, query_sid=None,
-               leaf_budget=0, time_budget_ms=0, exclude_span=None, capacity=None, candidate_filter=None):
+               leaf_budget=0, time_budget_ms=0, exclude_span=None, capacity=None, candidate_filter=None,
+               candidate_backend='auto'):
         """One pass with initial redundancy, no all-distance cache or adaptive rescans.
 
         An underfilled diverse result is explicitly marked incomplete. Increase
@@ -255,7 +270,13 @@ class Library:
         capacity = max(k, int(capacity or k * self.c['index']['oversample']))
         length = self.c['length']; span = exclude_span or length + max(self.c['horizons'])
         fanout, leaf_size = self.c['index']['fanout'], self.c['index']['leaf_size']
-        queue, best, leaves, visited, scored, eligible = [], Candidates(capacity), 0, 0, 0, 0
+        from .native_search import LIB, NativeCandidates
+        if candidate_backend not in ('auto','numpy','native'):
+            raise ValueError('Unknown candidate backend')
+        use_native=candidate_backend=='native' or (candidate_backend=='auto' and LIB is not None)
+        best=NativeCandidates(capacity) if use_native else Candidates(capacity)
+        queue, leaves, visited, scored, eligible = [], 0, 0, 0, 0
+        trees={}; payloads={}
         for i, shard in enumerate(self.meta['shards']):
             if sid is not None and shard['sid'] != sid:
                 continue
@@ -263,8 +284,8 @@ class Library:
                 continue
             eligible += shard['n']
             level = len(shard['levels'][channel]) - 1
-            lo = self.array(i, f'{channel}/lo{level}.npy')[0]
-            hi = self.array(i, f'{channel}/hi{level}.npy')[0]
+            trees[i]=self.node_boxes(i,channel)
+            lo,hi = trees[i][level][0][0],trees[i][level][1][0]
             if q.shape != lo.shape:
                 raise ValueError('Query dimension mismatch')
             heapq.heappush(queue, (float(lower_bound(q, lo, hi)), i, level, 0))
@@ -280,8 +301,8 @@ class Library:
             shard = self.meta['shards'][shard_id]
             if level:
                 a = node * fanout; b = min(a + fanout, shard['levels'][channel][level-1])
-                bounds = lower_bound(q, self.array(shard_id, f'{channel}/lo{level-1}.npy')[a:b],
-                                     self.array(shard_id, f'{channel}/hi{level-1}.npy')[a:b])
+                lo,hi=trees[shard_id][level-1]
+                bounds = lower_bound(q,lo[a:b],hi[a:b])
                 for child, lb in enumerate(bounds, a):
                     if lb <= threshold:
                         heapq.heappush(queue, (float(lb), shard_id, level-1, child))
@@ -290,21 +311,31 @@ class Library:
                     stopped = True; break
                 leaves += 1
                 a = node * leaf_size; b = min(a + leaf_size, shard['n'])
-                starts_file = f'{channel}/starts.npy' if self.meta.get('layout') == 'spatial' else 'starts.npy'
-                starts = self.array(shard_id, starts_file)[a:b]
+                if shard_id not in payloads:
+                    starts_file = f'{channel}/starts.npy' if self.meta.get('layout') == 'spatial' else 'starts.npy'
+                    # Zero-copy ndarray views retain mmap ownership, avoiding
+                    # memmap subclass overhead on each leaf slice.
+                    payloads[shard_id]=(np.asarray(self.array(shard_id,starts_file)),
+                                        np.asarray(self.array(shard_id,f'{channel}/vectors.npy')))
+                starts = payloads[shard_id][0][a:b]
                 allowed = np.ones(len(starts), dtype=bool)
                 excluded_sid = sid if query_sid is None else query_sid
                 if query_start is not None and shard['sid'] == excluded_sid:
                     allowed &= np.abs(starts-query_start) >= span
-                values = np.asarray(self.array(shard_id, f'{channel}/vectors.npy')[a:b], dtype=np.float64)
+                if not allowed.any(): continue
+                values=payloads[shard_id][1][a:b]
+                if not allowed.all():
+                    values=values[allowed]; starts=starts[allowed]
+                values = np.asarray(values, dtype=np.float64)
                 ds = np.sum((values-q)**2, axis=1); scored += len(ds)
-                best.add(ds[allowed],shard['sid'],starts[allowed])
+                best.add(ds,shard['sid'],starts)
         hits = best.hits()
         if candidate_filter is not None:
             hits=candidate_filter(hits)
         selected = diverse(hits, k, length)
         return selected, dict(search_ms=(time.perf_counter()-began)*1000, leaves=leaves, nodes=visited,
                               scored=scored, eligible=eligible, candidates_retained=len(best),
-                              capacity=capacity, certified=not stopped, complete_topk=len(selected)==k,
+                              capacity=capacity, candidate_backend='native' if use_native else 'numpy',
+                              certified=not stopped, complete_topk=len(selected)==k,
                               exact_diverse_topk=not stopped and len(selected)==k,
                               returned=len(selected), leaf_budget=leaf_budget, time_budget_ms=time_budget_ms)

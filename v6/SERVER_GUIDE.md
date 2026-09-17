@@ -2,6 +2,8 @@
 
 已有服务器 V6 模型/结果时，优先看 [历史＋未来联合检索及运行命令](JOINT_RETRIEVAL.md)。纯 learned 加速/融合对照见 [本轮优化报告](OPTIMIZATION.md)。无需重复导入 CSV。最新默认配置增加 joint 通道；仅保留 learned 通道是在做旧目标的对照，正式双向相似检索可只保留 joint。
 
+已有联合/PatchTST 索引时，可直接启用 [检索执行优化](SEARCH_OPTIMIZATION.md)：更新代码后，在仓库根目录运行 `python -m v6.build_native`，重启检索进程即可。无需重训或重建索引；没有编译器时自动使用 NumPy 备用实现。
+
 ## 1. 获取代码与环境
 
 从仓库根目录执行所有命令。已有 V4/V5 分支不需要修改。

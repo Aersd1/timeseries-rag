@@ -92,23 +92,30 @@ class Retriever:
             q=np.asarray(x,dtype=float)
             qz=(q-q.mean())/max(float(q.std()),scale_floor(self.store.series[sid],self.c))
             selected=[]; checked=0; limit=e['history_max_nmse']; m=self.c['length']
+            all_ids=np.array([hit['sid'] for hit in hits],dtype=np.int64)
+            all_positions=np.array([hit['start'] for hit in hits],dtype=np.int64)
+            available=np.ones(len(hits),dtype=bool)
+            floor_by_sid=np.array([scale_floor(series,self.c) for series in self.store.series])
+            coordinates=np.arange(m)[None,:]
             for a in range(0,len(hits),64):
-                batch=[hit for hit in hits[a:a+64] if all(hit['sid']!=old['sid'] or abs(hit['start']-old['start'])>=m for old in selected)]
-                if not batch: continue
-                past=np.empty((len(batch),m),dtype=np.float64)
-                ids=np.array([hit['sid'] for hit in batch]); positions=np.array([hit['start'] for hit in batch],dtype=np.int64)
+                indices=np.flatnonzero(available[a:a+64])+a
+                if not len(indices): continue
+                past=np.empty((len(indices),m),dtype=np.float64)
+                ids=all_ids[indices]; positions=all_positions[indices]
                 for source_sid in np.unique(ids):
                     mask=ids==source_sid
                     # Read a bounded batch of histories, not thousands of Python window calls.
-                    past[mask]=self.store.values(int(source_sid))[positions[mask,None]+np.arange(m)[None,:]]
+                    past[mask]=self.store.values(int(source_sid))[positions[mask,None]+coordinates]
                 if not np.isfinite(past).all(): raise ValueError('Indexed history is no longer finite')
-                floors=np.array([scale_floor(self.store.series[hit['sid']],self.c) for hit in batch])
+                floors=floor_by_sid[ids]
                 z=(past-past.mean(1)[:,None])/np.maximum(past.std(1),floors)[:,None]
                 ds=np.mean((z-qz)**2,axis=1); checked+=len(ds)
-                for hit,d in zip(batch,ds):
-                    if d<=limit and all(hit['sid']!=old['sid'] or abs(hit['start']-old['start'])>=m for old in selected):
-                        selected.append(dict(hit,history_nmse=float(d)))
-                        if len(selected)==e['k']: break
+                for offset in np.flatnonzero(ds<=limit):
+                    i=indices[offset]
+                    if not available[i]: continue
+                    selected.append(dict(hits[i],history_nmse=float(ds[offset])))
+                    available &= ~((all_ids==all_ids[i]) & (np.abs(all_positions-all_positions[i])<m))
+                    if len(selected)==e['k']: break
                 if len(selected)==e['k']: break
             gate_stats.update(history_checked=checked,history_threshold=limit)
             return selected

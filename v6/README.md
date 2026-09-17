@@ -6,6 +6,8 @@
 
 **当前主方案：[同时约束历史与未来的联合检索](JOINT_RETRIEVAL.md)。** 包含真实历史距离门槛、联合训练目标、历史近邻批次和配对实测。纯 learned 的加速及融合对照见 [本轮优化报告](OPTIMIZATION.md)。旧 checkpoint 兼容；新 CDF 编码与训练约束需要重训编码器。
 
+**服务器最新模型的检索执行优化：[使用、编译与同机召回对照](SEARCH_OPTIMIZATION.md)。** 迁入 V4 的有界候选堆与批量去重，不需要重训或重建索引。运行 `python -m v6.build_native` 启用可选 C 加速；缺少编译库时自动使用 NumPy。
+
 ## 模型与检索流程
 
 ```mermaid
