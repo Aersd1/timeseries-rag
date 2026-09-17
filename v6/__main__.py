@@ -20,11 +20,23 @@ def main():
     index = sub.add_parser('index')
     for key in ('store','checkpoint','output'): index.add_argument('--'+key, required=True)
     index.add_argument('--device', default='cpu')
+    repack = sub.add_parser('repack')
+    repack.add_argument('--index',required=True); repack.add_argument('--output',required=True)
+    repack.add_argument('--channels',nargs='+',choices=('learned','history','belief','joint'))
+    repack.add_argument('--joint-history-weight',type=float); repack.add_argument('--history-max-nmse',type=float)
+    configure = sub.add_parser('configure')
+    configure.add_argument('--source',required=True); configure.add_argument('--output',required=True)
     ev = sub.add_parser('evaluate')
     for key in ('store','checkpoint','index','output'): ev.add_argument('--'+key, required=True)
     ev.add_argument('--device', default='cpu'); ev.add_argument('--split', choices=('validation','test'), default='test')
     ev.add_argument('--leaf-budgets', type=int, nargs='+'); ev.add_argument('--time-budget-ms', type=float)
     ev.add_argument('--oversample', type=int)
+    ev.add_argument('--fusion')
+    ev.add_argument('--channels',nargs='+',choices=('learned','history','belief','joint'))
+    ev.add_argument('--audit-queries',type=int)
+    calibrate = sub.add_parser('calibrate')
+    calibrate.add_argument('--results',required=True); calibrate.add_argument('--output',required=True)
+    calibrate.add_argument('--method',default='learned_leaves0')
     an = sub.add_parser('analyze'); an.add_argument('--results', required=True)
     an.add_argument('--prior-training'); an.add_argument('--encoder-training')
     compare = sub.add_parser('compare')
@@ -33,6 +45,8 @@ def main():
     for key in ('store','checkpoint','index','history','output'): query.add_argument('--'+key, required=True)
     query.add_argument('--sid', type=int, required=True); query.add_argument('--start', type=int)
     query.add_argument('--device', default='cpu'); query.add_argument('--leaf-budget', type=int, default=0)
+    query.add_argument('--fusion')
+    query.add_argument('--channel',choices=('learned','history','belief','joint'))
     args = vars(p.parse_args()); command = args.pop('command')
     if command == 'doctor':
         import glob
@@ -45,10 +59,11 @@ def main():
             if not matched: raise SystemExit('Edit CSV paths before ingest (or use an existing compatible V5 store).')
     elif command == 'estimate':
         c = config(args['config']); m = c['model']; n = args['points']//c['index']['stride']
-        dims = dict(learned=m['dim'], history=m['history_bins'], belief=m['components']*(1+2*m['belief_bins']))
+        from .model import belief_dim
+        dims = dict(learned=m['dim'], history=m['history_bins'], belief=belief_dim(c),joint=m['dim']+m['history_bins'])
         d = sum(dims[ch] for ch in c['index']['channels'])
         print(json.dumps(dict(assumption='All points eligible; excludes raw CSV and model workspace', windows=n,
-            vector_GB=n*d*4/1e9, starts_GB=n*8/1e9,
+            vector_GB=n*d*4/1e9, starts_GB=n*8*(1+len(c['index']['channels']) if c['index'].get('layout')=='spatial' else 1)/1e9,
             approximate_boxes_GB=n/c['index']['leaf_size']*8*d*c['index']['fanout']/(c['index']['fanout']-1)/1e9,
             note='Disk/RAM estimate only. No latency or recall guarantee.'), indent=2))
     elif command == 'ingest':
@@ -64,7 +79,27 @@ def main():
     elif command == 'evaluate':
         from .evaluate import evaluate
         evaluate(args['store'], args['checkpoint'], args['index'], args['output'], args['split'], args['device'],
-                 args['leaf_budgets'], args['time_budget_ms'], args['oversample'])
+                 args['leaf_budgets'], args['time_budget_ms'], args['oversample'],args['fusion'],args['channels'],args['audit_queries'])
+    elif command == 'calibrate':
+        from .fusion import calibrate
+        print(calibrate(args['results'],args['output'],args['method']))
+    elif command == 'repack':
+        from .index import repack
+        result = repack(args['index'],args['output'],args['channels'],args['joint_history_weight'],args['history_max_nmse'])
+        print(dict(windows=result['windows'],bytes=result['payload_bytes'],seconds=result['repack_seconds']))
+    elif command == 'configure':
+        from .common import write_json
+        c=config(args['source'])
+        c['model']['belief_signature']='cdf'; c['index']['layout']='spatial'
+        c['model']['history_reconstruction']=True
+        c['index']['joint_history_weight']=.5
+        c['index']['channels']=list(dict.fromkeys([*c['index']['channels'],'joint']))
+        c['evaluation']['history_max_nmse']=.5
+        c['training'].update(distribution_teacher_weight=.2,variance_weight=1.,covariance_weight=.05,prior_multi_horizon=True)
+        c['training'].update(history_teacher_weight=1.,history_reconstruction_weight=.5)
+        c['training'].update(history_neighbor_batches=True,history_neighbor_fraction=.5)
+        if Path(args['output']).exists(): raise FileExistsError('Choose a fresh config output')
+        write_json(args['output'],c); print(args['output'])
     elif command == 'analyze':
         from .analyze import analyze
         analyze(args['results'], args['prior_training'], args['encoder_training'])
@@ -73,9 +108,9 @@ def main():
         import numpy as np
         from .inference import Retriever
         from .common import write_json
-        r = Retriever(args['store'], args['checkpoint'], args['index'], args['device'])
+        r = Retriever(args['store'], args['checkpoint'], args['index'], args['device'],args['fusion'])
         try:
-            result = r.retrieve(np.load(args['history'], allow_pickle=False), args['sid'], args['start'], leaf_budget=args['leaf_budget'])
+            result = r.retrieve(np.load(args['history'], allow_pickle=False), args['sid'], args['start'], channel=args['channel'],leaf_budget=args['leaf_budget'])
             write_json(args['output'], dict(hits=result['hits'], stats=result['stats'], forecast=result['prediction'].tolist()))
         finally: r.close()
     elif command == 'compare':

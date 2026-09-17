@@ -6,7 +6,8 @@ from pathlib import Path
 import numpy as np
 from scipy.special import ndtr
 from scipy.stats import spearmanr
-from .common import fresh_dir, write_json, environment
+from .common import fresh_dir, write_json, environment, read_json, sha256
+from .fusion import FusionStats, check as check_fusion, apply as apply_fusion
 from .data import Windows, scale_floor
 from .inference import Retriever, analog
 from .index import diverse
@@ -84,8 +85,14 @@ def brute_audit(r, x, y, sid, start):
 
 
 def evaluate(store_path, checkpoint, index_path, output, split='test', device='cpu', leaf_budgets=None,
-             time_budget_ms=None, oversample=None):
+             time_budget_ms=None, oversample=None, fusion_path=None, channels=None, audit_queries=None):
     r = Retriever(store_path, checkpoint, index_path, device)
+    if channels is not None:
+        if not channels or set(channels)-set(r.c['index']['channels']): raise ValueError('Requested channel not built')
+        r.c['index']['channels']=list(dict.fromkeys(channels))
+    if audit_queries is not None:
+        if audit_queries<0: raise ValueError('Negative audit query count')
+        r.c['evaluation']['audit_queries']=audit_queries
     if leaf_budgets is not None:
         if not leaf_budgets or min(leaf_budgets) < 0: raise ValueError('Invalid leaf budgets')
         r.c['evaluation']['leaf_budgets'] = list(dict.fromkeys(leaf_budgets))
@@ -97,9 +104,17 @@ def evaluate(store_path, checkpoint, index_path, output, split='test', device='c
         r.c['index']['oversample'] = oversample
         r.library.c['index']['oversample'] = oversample
     c = r.c; dataset = Windows(store_path, c, split); out = fresh_dir(output)
+    fusion=read_json(fusion_path) if fusion_path else None
+    index_sha=sha256(Path(index_path)/'manifest.json')
+    if fusion:
+        check_fusion(fusion,r.state['data_id'],r.library.meta['checkpoint_sha256'],index_sha,c,fusion['method'])
+        if int(fusion['method'].split('leaves')[-1]) not in c['evaluation']['leaf_budgets']:
+            raise ValueError('Fusion retrieval budget not requested')
+    fusion_stats=FusionStats(c['horizons'])
     records, timing, calibration, audits, examples, encodings = [], [], [], [], [], []
     run = dict(version=6, split=split, complete=False, queries=len(dataset), config=c,
                data_id=r.state['data_id'], checkpoint_sha256=r.library.meta['checkpoint_sha256'],
+               index_sha256=index_sha, fusion=fusion,
                checkpoint_epoch=r.state.get('epoch', -1), index_windows=r.library.meta['windows'],
                index_bytes=r.library.meta.get('payload_bytes'), environment=environment(),
                timing_note='Independent encode+search+candidate fetch per method; process/model startup excluded. First query marked.',
@@ -131,6 +146,11 @@ def evaluate(store_path, checkpoint, index_path, output, split='test', device='c
                     mapped = result['mapped']
                     future_errors = np.mean(((mapped-y)/scale)**2, axis=1) if len(mapped) else np.array([])
                     distances = [hit['distance'] for hit in result['hits']]
+                    history_errors=[]
+                    for hit in result['hits']:
+                        past=r.store.window(hit['sid'],hit['start'],c['length']).astype(float)
+                        z=(past-past.mean())/max(float(past.std()),scale_floor(r.store.series[hit['sid']],c))
+                        history_errors.append(float(np.mean((z-(x.astype(float)-float(x.mean()))/scale)**2)))
                     corr = None
                     if len(mapped)>2 and np.std(distances)>1e-12 and np.std(future_errors)>1e-12:
                         corr = float(spearmanr(distances, future_errors).statistic)
@@ -138,6 +158,9 @@ def evaluate(store_path, checkpoint, index_path, output, split='test', device='c
                         exact_diverse_topk=result['stats']['exact_diverse_topk'],
                         best_future_nmse=float(future_errors.min()) if len(mapped) else None,
                         mean_future_nmse=float(future_errors.mean()) if len(mapped) else None,
+                        mean_history_nmse=float(np.mean(history_errors)) if history_errors else None,
+                        max_history_nmse=float(np.max(history_errors)) if history_errors else None,
+                        future_nmse_by_horizon={str(h):float(np.mean(((mapped[:,:h]-y[:h])/scale)**2)) for h in c['horizons']} if len(mapped) else {},
                         distance_future_spearman=corr)
             for channel in c['index']['channels']:
                 reference = retrieval_details.get(f'{channel}_leaves0')
@@ -146,6 +169,14 @@ def evaluate(store_path, checkpoint, index_path, output, split='test', device='c
                     for budget in c['evaluation']['leaf_budgets']:
                         detail = retrieval_details[f'{channel}_leaves{budget}']
                         detail['embedding_recall_against_full'] = len(ids & {(hit['sid'],hit['start']) for hit in detail['hits']})/len(ids)
+            fusion_stats.add(forecasts,y,max(s['memory_std'],1e-6))
+            if fusion:
+                fusion_began=time.perf_counter()
+                forecasts['validation_fusion']=apply_fusion(fusion,forecasts)
+                fusion_ms=(time.perf_counter()-fusion_began)*1000
+                source_timing=next(row for row in reversed(timing) if row['query']==qi and row['method']==fusion['method'])
+                timing.append(dict(source_timing,method='validation_fusion',total_ms=source_timing['total_ms']+fusion_ms,
+                                   fusion_ms=fusion_ms,latency_source='retrieval query plus measured fusion arithmetic'))
             if qi in audit_ids:
                 hit_sets, audit_stats = brute_audit(r, x, y, sid, start)
                 for method, hits in hit_sets.items():
@@ -165,7 +196,8 @@ def evaluate(store_path, checkpoint, index_path, output, split='test', device='c
                         history_nmse=mse/scale**2, persistence_nmse=base/memory_scale**2,
                         audit_query=qi in audit_ids))
             if len(examples) < c['evaluation']['max_examples']:
-                detail = retrieval_details.get('learned_leaves0', next(iter(retrieval_details.values())))
+                detail = next((v for name,v in retrieval_details.items() if name.startswith('joint_leaves')),
+                              retrieval_details.get('learned_leaves0', next(iter(retrieval_details.values()))))
                 matches = []
                 for hit in detail['hits'][:3]:
                     values = r.store.window(hit['sid'],hit['start'],len(x)+len(y)).astype(float)
@@ -190,6 +222,7 @@ def evaluate(store_path, checkpoint, index_path, output, split='test', device='c
             run['embedding_diagnostics'] = dict(mean_dimension_std=float(v.std(0).mean()),
                 effective_rank=float(np.exp(-(mass*np.log(np.maximum(mass, 1e-30))).sum())) if eigen.sum()>1e-30 else 0.)
         run['complete'] = True; write_json(out/'run.json', run)
+        write_json(out/'fusion_stats.json',fusion_stats.export(run))
     finally:
         dataset.store.close(); r.close()
     return run

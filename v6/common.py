@@ -24,11 +24,19 @@ def config(path):
     for key in ('hidden', 'dim', 'components', 'belief_bins', 'history_bins'):
         if c['model'][key] < 1:
             raise ValueError(key)
+    if c['model'].get('belief_signature','components') not in ('components','cdf'):
+        raise ValueError('Unknown belief signature')
+    if not 0 <= c['training'].get('distribution_teacher_weight',0) <= 1:
+        raise ValueError('Invalid distribution teacher weight')
+    if any(c['training'].get(k,0)<0 for k in ('variance_weight','covariance_weight','history_teacher_weight','history_reconstruction_weight')):
+        raise ValueError('Negative regularization weight')
     for key in ('batch_size', 'prior_epochs', 'encoder_epochs', 'samples_per_series'):
         if c['training'][key] < 1:
             raise ValueError(key)
     if c['training']['batch_size'] < 3:
         raise ValueError('Contrastive training needs batch_size >= 3')
+    if not 0<c['training'].get('history_neighbor_fraction',.5)<1:
+        raise ValueError('Invalid history neighbor fraction')
     for key in ('stride', 'leaf_size', 'shard_windows', 'batch_size'):
         if c['index'][key] < 1:
             raise ValueError(key)
@@ -42,8 +50,12 @@ def config(path):
         raise ValueError('Negative time budget')
     if c['index']['fanout'] < 2 or not c['index']['channels']:
         raise ValueError('Invalid hierarchy')
-    if set(c['index']['channels']) - {'learned', 'history', 'belief'}:
+    if c['index'].get('layout','temporal') not in ('temporal','spatial'):
+        raise ValueError('Unknown index layout')
+    if set(c['index']['channels']) - {'learned', 'history', 'belief', 'joint'}:
         raise ValueError('Unknown channel')
+    if not 0<c['index'].get('joint_history_weight',.5)<1 or c['evaluation'].get('history_max_nmse',.5)<=0:
+        raise ValueError('Invalid joint retrieval settings')
     if c['normalization']['memory_std_floor'] <= 0:
         raise ValueError('Positive memory scale floor required')
     if c['training']['temperature'] <= 0 or c['training']['target_temperature'] <= 0:

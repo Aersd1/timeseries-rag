@@ -1,0 +1,51 @@
+{
+  "version": 6,
+  "split": "validation",
+  "complete": true,
+  "data_id": "6e2e11171e7f741a01b44f3537bdae94efa33f8b44f594a25f9a1ba71d417aec",
+  "checkpoint_sha256": "0f9f616b517737acc2f9cbb7a0ad122b868a453b0f2613e60f332283233445a5",
+  "index_sha256": "7e1325a1698caa4469e78dbf18c7ded37f2d485082a5d904118067b834801d37",
+  "scope": "series",
+  "k": 10,
+  "oversample": 512,
+  "time_budget_ms": 0,
+  "edges": [
+    0,
+    24,
+    96,
+    244
+  ],
+  "queries": 64,
+  "method": "learned_leaves0",
+  "names": [
+    "persistence",
+    "encoder_forecast",
+    "probabilistic_prior",
+    "learned_leaves0"
+  ],
+  "weights": [
+    [
+      0.0,
+      0.5101527172238843,
+      0.0,
+      0.4898472827761157
+    ],
+    [
+      0.0,
+      0.4496796192938731,
+      0.0,
+      0.5503203807061269
+    ],
+    [
+      4.7363714868727694e-17,
+      0.4209147976630037,
+      0.0,
+      0.5790852023369962
+    ]
+  ],
+  "validation_segment_nmse": [
+    0.15451887425124594,
+    0.5539956148412074,
+    1.1593131202183298
+  ]
+}

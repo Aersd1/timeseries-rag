@@ -34,6 +34,8 @@ class ProbabilityTests(unittest.TestCase):
         likelihood = np.array([norm.pdf(1.5, 0)**2*.3, norm.pdf(1.5, 2)**2*.7])
         np.testing.assert_allclose(posterior(p,target).numpy()[0], likelihood/likelihood.sum(), rtol=1e-6)
         self.assertAlmostEqual(float(prior_loss(p,target)), -np.log(likelihood.sum())/2, places=6)
+        single=.3*norm.pdf(1.5,0)+.7*norm.pdf(1.5,2)
+        self.assertAlmostEqual(float(prior_loss(p,target,[1,2])),(-np.log(single)-np.log(likelihood.sum())/2)/2,places=6)
 
     def test_normal_calibration(self):
         p = dict(center=0., scale=1., logp=np.array([0.]), mu=np.zeros((1,8)), sigma=np.ones((1,8)))
@@ -167,6 +169,23 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue(all(v['mean']==1 for k,v in report['embedding_recall_against_full'].items() if k.endswith('leaves0')))
             metrics=[json.loads(line) for line in (root/'evaluation/metrics.jsonl').read_text().splitlines()]
             self.assertTrue(all(np.isfinite(row['nmse']) for row in metrics))
+            from v6.fusion import calibrate, apply
+            evaluate(root/'store',checkpoint,root/'index',root/'validation',split='validation')
+            fitted=calibrate(root/'validation',root/'fusion.json')
+            r=Retriever(root/'store',checkpoint,root/'index',fusion_path=root/'fusion.json')
+            ds=Windows(root/'store',c,'test'); b=ds[0]
+            found=r.retrieve(b['x'],int(b['sid']),int(b['start']))
+            self.assertTrue(np.isfinite(found['prediction']).all())
+            self.assertEqual(len(found['raw_prediction']),16)
+            ds.store.close(); r.close()
+            # Joint retrieval certifies its raw-history threshold, not real future similarity.
+            r=Retriever(root/'store',checkpoint,root/'index')
+            found=r.retrieve(b['x'],int(b['sid']),int(b['start']),channel='joint')
+            self.assertGreater(len(found['hits']),0)
+            for hit in found['hits']:
+                self.assertLessEqual(hit['history_nmse'],c['evaluation']['history_max_nmse'])
+                self.assertGreaterEqual(abs(hit['start']-int(b['start'])),56)
+            r.close()
             # A different weights file must not query an existing index.
             save_torch(root/'wrong.pt',dict(version=6,stage='encoder',config=c,model=BeliefEncoder(c).state_dict(),data_id=meta['data_id'],epoch=-1))
             with self.assertRaisesRegex(ValueError,'different weights'):

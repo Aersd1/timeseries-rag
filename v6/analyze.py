@@ -57,19 +57,45 @@ def analyze(results, prior_training=None, encoder_training=None):
             within100ms=float((part.total_ms<=100).mean()),
             first_query_ms=part[part.first_query].total_ms.tolist(),
             certified_fraction=float(part.certified.mean()), complete_topk_fraction=float(part.complete_topk.mean()),
+            mean_returned=float(part.returned.mean()), no_match_fraction=float((part.returned==0).mean()),
             mean_scored_fraction=float((part.scored/part.eligible.clip(lower=1)).mean())))
     calibration = cal.groupby('horizon')[['crps','marginal_nll','coverage90','width90']].mean().reset_index().to_dict('records')
     audit = rows(out/'audits.jsonl')
     diagnostics = rows(out/'retrieval.jsonl')
-    association, embedding_recall = {}, {}
+    association, embedding_recall, similarity = {}, {}, {}
     for entry in diagnostics:
         for name, detail in entry['details'].items():
+            similarity.setdefault(name,[]).append(detail)
             if 'embedding_recall_against_full' in detail:
                 embedding_recall.setdefault(name,[]).append(detail['embedding_recall_against_full'])
             if detail['distance_future_spearman'] is not None:
                 association.setdefault(name, []).append(detail['distance_future_spearman'])
+    candidate_pairs=[]
+    for name in similarity:
+        if not name.startswith('joint_leaves'): continue
+        baseline='learned_leaves'+name.split('leaves')[-1]
+        paired_rows=[]
+        for entry in diagnostics:
+            left=entry['details'].get(name); right=entry['details'].get(baseline)
+            if not left or not right or min(len(left['hits']),len(right['hits']))<run['config']['evaluation']['k']: continue
+            if left.get('mean_history_nmse') is None or right.get('mean_history_nmse') is None: continue
+            paired_rows.append(dict(query=entry['query'],sid=entry['sid'],history=left['mean_history_nmse'],
+                history_baseline=right['mean_history_nmse'],nmse=left['mean_future_nmse'],persistence_nmse=right['mean_future_nmse']))
+        if paired_rows:
+            pairs=pd.DataFrame(paired_rows)
+            candidate_pairs.append(dict(method=name,baseline=baseline,complete_pair_queries=len(pairs),
+                mean_history_nmse=float(pairs.history.mean()),baseline_history_nmse=float(pairs.history_baseline.mean()),
+                mean_future_nmse=float(pairs.nmse.mean()),baseline_future_nmse=float(pairs.persistence_nmse.mean()),
+                future_comparison=paired_summary(pairs,run['config']['evaluation']['bootstrap_samples'],rng)))
     report = dict(forecast=summary, by_group=grouped, paired_comparisons=paired, timing=speed, calibration=calibration,
+                  candidate_paired_comparisons=candidate_pairs,
                   embedding_diagnostics=run.get('embedding_diagnostics'),
+                  candidate_similarity={name:dict(queries=len(items),no_match_queries=sum(not x['hits'] for x in items),
+                     mean_history_nmse=float(np.mean([x['mean_history_nmse'] for x in items if x.get('mean_history_nmse') is not None])) if any(x.get('mean_history_nmse') is not None for x in items) else None,
+                     max_history_nmse=max([x['max_history_nmse'] for x in items if x.get('max_history_nmse') is not None],default=None),
+                     mean_future_nmse=float(np.mean([x['mean_future_nmse'] for x in items if x.get('mean_future_nmse') is not None])) if any(x.get('mean_future_nmse') is not None for x in items) else None,
+                     future_nmse_by_horizon={str(h):float(np.mean([x['future_nmse_by_horizon'][str(h)] for x in items if str(h) in x.get('future_nmse_by_horizon',{})]))
+                                             for h in run['config']['horizons'] if any(str(h) in x.get('future_nmse_by_horizon',{}) for x in items)}) for name,items in similarity.items()},
                   embedding_recall_against_full={k:dict(mean=float(np.mean(v)),queries=len(v)) for k,v in embedding_recall.items()},
                   audited_queries=len(audit), future_oracle_id_recall={
                       name: float(np.mean([a['future_oracle_id_recall'][name] for a in audit]))
@@ -90,7 +116,14 @@ def analyze(results, prior_training=None, encoder_training=None):
     lines += ['', '## Probability calibration', '', '|H|CRPS (normalized)|Marginal NLL|90% interval coverage|Interval width|', '|---:|---:|---:|---:|---:|']
     for row in calibration:
         lines.append(f"|{row['horizon']}|{row['crps']:.5g}|{row['marginal_nll']:.5g}|{row['coverage90']:.3f}|{row['width90']:.3f}|")
-    lines += ['', '## Interpretation', '',
+    lines += ['', '## Retrieved histories AND futures (per-candidate errors)', '',
+              '|Method|Mean history NMSE|Maximum history NMSE|Mean future NMSE|Queries without matches|',
+              '|---|---:|---:|---:|---:|']
+    for name,row in report['candidate_similarity'].items():
+        def fmt(value): return 'n/a' if value is None else f'{value:.5g}'
+        lines.append(f"|{name}|{fmt(row['mean_history_nmse'])}|{fmt(row['max_history_nmse'])}|{fmt(row['mean_future_nmse'])}|{row['no_match_queries']}|")
+    lines += ['', 'Candidate future errors use query-history scale and are not the same metric as memory-normalized aggregate forecast errors. Missing matches are counted separately.',
+              '', '## Interpretation', '',
               '- Evidence for future-aware retrieval requires learned retrieval to beat history retrieval AND persistence on paired test queries; use the no-belief ablation too.',
               '- A calibrated 90% interval should have coverage near 0.9 without excessive width. This does not imply retrieval recall is 90%.',
               '- `future_oracle_id_recall` compares exact starts in the indexed, possibly subsampled library; ties can make this metric pessimistic.',
@@ -116,7 +149,11 @@ def analyze(results, prior_training=None, encoder_training=None):
         fig, ax = plt.subplots(figsize=(12, 4)); m = len(ex['x']); h = len(ex['y'])
         ax.plot(np.arange(-m, 0), ex['x'], label='Observed history', color='black')
         ax.plot(np.arange(h), ex['y'], label='True future', color='black', linestyle='--')
-        for name in ('persistence','probabilistic_prior','learned_leaves0','history_leaves0','belief_leaves0'):
+        plotted=['persistence','probabilistic_prior']
+        for channel in ('learned','history','belief','joint'):
+            name=next((name for name in ex['forecasts'] if name.startswith(channel+'_leaves')),None)
+            if name: plotted.append(name)
+        for name in plotted:
             if name in ex['forecasts']:
                 ax.plot(np.arange(h), ex['forecasts'][name], label=name, alpha=.8)
         ax.fill_between(np.arange(h), ex['lower90'], ex['upper90'], alpha=.15, label='Prior 90% marginal interval')
@@ -136,6 +173,7 @@ def analyze(results, prior_training=None, encoder_training=None):
         if source:
             name = label+'.json'; write_json(out/name, read_json(Path(source)/'history.json')); extras.append(name)
     names = ['REPORT.md','analysis.json','overview.png','run_public.json','metrics.jsonl','timing.jsonl','calibration.jsonl','audits.jsonl','retrieval.jsonl']+extras
+    if (out/'fusion_stats.json').exists(): names.append('fusion_stats.json')
     with zipfile.ZipFile(out/'analysis_bundle.zip', 'w', zipfile.ZIP_DEFLATED) as bundle:
         for name in names:
             bundle.write(out/name, name)

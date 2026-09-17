@@ -41,6 +41,8 @@ def fit(store_path, config_path, output, stage, device='cpu', prior_path=None, r
                 raise ValueError(f'Prior mismatch: {key}')
         model = BeliefEncoder(c).to(device)
         model.prior.load_state_dict(prior.state_dict())
+        # The encoder config chooses the signature; prior weights need not change.
+        model.prior.c = c
         prior_sha = sha256(prior_path)
     parameters = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(parameters, lr=c['training']['lr'], weight_decay=c['training']['weight_decay'])
@@ -61,10 +63,15 @@ def fit(store_path, config_path, output, stage, device='cpu', prior_path=None, r
     write_json(out / 'config.json', c)
     write_json(out / 'environment.json', dict(**environment(), torch=str(torch.__version__), device=str(device),
                                               train_windows=len(train), validation_windows=len(validation)))
+    sampler=None
+    if stage=='encoder' and c['training'].get('history_neighbor_batches',False):
+        from .sampling import HistoryBatches
+        sampler=HistoryBatches(train,c['training']['batch_size'],c['seed'],c['training'].get('history_neighbor_fraction',.5))
 
     def loss_for(batch):
         if stage == 'prior':
-            loss = prior_loss(model(batch['x'], batch['floor']), batch['y'])
+            loss = prior_loss(model(batch['x'], batch['floor']), batch['y'],
+                              c['horizons'] if c['training'].get('prior_multi_horizon',False) else None)
             return loss, {'nll_per_point': loss}
         return encoder_loss(model, batch)
 
@@ -72,8 +79,12 @@ def fit(store_path, config_path, output, stage, device='cpu', prior_path=None, r
         for epoch in range(start, c['training'][stage + '_epochs']):
             began, totals, count = time.perf_counter(), {}, 0
             model.train()
-            loader = DataLoader(train, batch_size=c['training']['batch_size'], shuffle=True, num_workers=0,
-                                generator=torch.Generator().manual_seed(c['seed'] + epoch))
+            if sampler is not None:
+                sampler.epoch=epoch
+                loader=DataLoader(train,batch_sampler=sampler,num_workers=0)
+            else:
+                loader = DataLoader(train, batch_size=c['training']['batch_size'], shuffle=True, num_workers=0,
+                                    generator=torch.Generator().manual_seed(c['seed'] + epoch))
             for batch in loader:
                 batch = {k: v.to(device) for k, v in batch.items()}
                 optimizer.zero_grad(set_to_none=True)

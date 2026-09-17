@@ -29,9 +29,9 @@ from v6.inference import Retriever, analog
 plt.rcParams["font.family"] = "DejaVu Sans"
 
 
-def nonzero_ok(x, y):
-    v = np.concatenate([x, y])
-    return np.isfinite(v).all() and not np.any(v == 0) and float(np.std(x)) > 1e-7
+def nonzero_ok(x):
+    # Example selection may inspect observed history, never held-out outcomes.
+    return np.isfinite(x).all() and not np.any(x == 0) and float(np.std(x)) > 1e-7
 
 
 def map_neighbor(store, c, x, sid, hit):
@@ -40,7 +40,7 @@ def map_neighbor(store, c, x, sid, hit):
     past, future = values[:m], values[m:]
     floor = scale_floor(store.series[hit["sid"]], c)
     cs = max(float(past.std()), floor)
-    mapped = float(x.mean()) + max(float(x.std()), floor) * (values - past.mean()) / cs
+    mapped = float(x.mean()) + max(float(x.std()), scale_floor(store.series[sid],c)) * (values - past.mean()) / cs
     return past, future, mapped
 
 
@@ -121,7 +121,7 @@ def collect_examples(retriever, n=6):
             batch = dataset[i]
             x, y = np.asarray(batch["x"], dtype=float), np.asarray(batch["y"], dtype=float)
             sid, start = int(batch["sid"]), int(batch["start"])
-            if not nonzero_ok(x, y):
+            if not nonzero_ok(x):
                 continue
             if per_series.get(sid, 0) >= cap:
                 continue
@@ -245,7 +245,8 @@ def visualize(store, checkpoint, index, vis, device, n_examples):
             "Neighbors are greedily de-duplicated with start gap >= 244.",
             "Futures are mapped with past-only mean/std scaling.",
             "",
-            "|Query|sid|start|shared starts|V4 hist-NMSE|V6 hist-NMSE|",
+            "Selected illustrations filtered by history only; not a representative benchmark. NMSE below scores FUTURE errors normalized by history variance.",
+            "|Query|sid|start|shared starts|V4 future NMSE (history scale)|V6 future NMSE (history scale)|",
             "|---|---:|---:|---:|---:|---:|",
         ]
         for row in metrics:

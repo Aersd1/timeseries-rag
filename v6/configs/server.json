@@ -8,12 +8,15 @@
   ]},
   "split": {"memory": 0.25, "train": 0.60, "validation": 0.80},
   "normalization": {"memory_std_floor": 0.1},
-  "model": {"hidden": 64, "dim": 32, "components": 4, "belief_bins": 8, "history_bins": 32, "use_belief": true},
+  "model": {"hidden": 64, "dim": 32, "components": 4, "belief_bins": 8, "history_bins": 32, "use_belief": true, "belief_signature": "cdf", "history_reconstruction": true},
   "training": {"prior_epochs": 30, "encoder_epochs": 30, "batch_size": 64, "samples_per_series": 10000,
     "sample_stride": 32, "lr": 0.0003, "weight_decay": 0.0001, "amp": true,
-    "temperature": 0.1, "target_temperature": 1.0, "future_weight": 1.0, "belief_weight": 0.2},
-  "index": {"stride": 1, "leaf_size": 256, "fanout": 16, "shard_windows": 100000,
-    "batch_size": 256, "channels": ["learned", "history", "belief"], "oversample": 512},
+    "temperature": 0.1, "target_temperature": 1.0, "future_weight": 1.0, "belief_weight": 0.2,
+    "distribution_teacher_weight": 0.2, "variance_weight": 1.0, "covariance_weight": 0.05, "prior_multi_horizon": true,
+    "history_teacher_weight": 1.0, "history_reconstruction_weight": 0.5,
+    "history_neighbor_batches": true, "history_neighbor_fraction": 0.5},
+  "index": {"stride": 1, "leaf_size": 256, "fanout": 16, "shard_windows": 100000, "layout": "spatial",
+    "batch_size": 256, "channels": ["learned", "history", "belief", "joint"], "oversample": 512, "joint_history_weight": 0.5},
   "evaluation": {"queries_per_series": 64, "k": 8, "scope": "series", "leaf_budgets": [0, 32, 128],
-    "time_budget_ms": 0, "audit_queries": 8, "max_examples": 6, "bootstrap_samples": 1000}
+    "time_budget_ms": 0, "audit_queries": 8, "max_examples": 6, "bootstrap_samples": 1000, "history_max_nmse": 0.5}
 }
