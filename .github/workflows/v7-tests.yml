@@ -1,0 +1,21 @@
+name: Moirai variants correctness
+on:
+  push:
+    branches: [moirai2-dual-retrieval]
+    paths: ['v7/**', '.github/workflows/v7-tests.yml']
+  pull_request:
+    paths: ['v7/**', '.github/workflows/v7-tests.yml']
+jobs:
+  cpu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r v7/requirements.txt
+      - run: python v4/build_native.py
+      - run: python -m unittest discover -s v7/tests -v
+        env:
+          OMP_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'

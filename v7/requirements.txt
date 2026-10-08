@@ -1,0 +1,12 @@
+# Separate Python 3.11/3.12 environment: upstream Uni2TS currently needs torch<2.5.
+# Do not combine with v6/requirements.txt (which requires torch>=2.5).
+torch==2.4.1
+numpy==1.26.4
+scipy==1.11.4
+pandas>=2.0,<3
+matplotlib>=3.8,<4
+huggingface_hub>=0.23,<1
+pyarrow>=14,<21
+jax==0.4.30
+jaxlib==0.4.30
+uni2ts @ git+https://github.com/SalesforceAIResearch/uni2ts.git@cfd46d4510ed8896f263116f32928eede05b0a75

@@ -1,0 +1,37 @@
+{
+  "version": 7,
+  "complete": true,
+  "split": "test",
+  "data_id": "6e2e11171e7f741a01b44f3537bdae94efa33f8b44f594a25f9a1ba71d417aec",
+  "queries": 64,
+  "leaf_budget": 0,
+  "artifacts": {
+    "index_b": "f67e533535f3bfe6cd44465d49f09fc0c30c6de937a14ca220a6789f65f05e15"
+  },
+  "timing_note": "Per-query latency; model load excluded; B engines preloaded per series; no warmup. First query per series marked.",
+  "comparison_policies": {
+    "b": {
+      "candidates": 20,
+      "top_k": 5,
+      "selection": "episodes",
+      "capacity": 20000,
+      "score": "pinball",
+      "history_weight": 0.0,
+      "chunk_points": 200000,
+      "max_points_per_series": 2000000
+    }
+  },
+  "moirai": {
+    "model_id": "Salesforce/moirai-2.0-R-small",
+    "revision": "30f43ff08c8494f4943ae1521e9d4e94a0fbb389",
+    "cache_dir": ".moirai-cache",
+    "local_files_only": false
+  },
+  "source": "existing local NREL store, 4 logical series, fixed first 25 percent memory",
+  "length": 244,
+  "horizons": [
+    24,
+    96,
+    244
+  ]
+}

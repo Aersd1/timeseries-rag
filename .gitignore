@@ -1,6 +1,9 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-moirai/
+.moirai-cache/
+v7/runs/
 venv/
 native.dll
 native.so

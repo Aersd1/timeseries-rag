@@ -1,0 +1,178 @@
+{
+  "forecast": [
+    {
+      "horizon": 24,
+      "method": "b_reranked",
+      "n": 64,
+      "nmse": 0.10915619123464534,
+      "win_rate": 0.421875
+    },
+    {
+      "horizon": 24,
+      "method": "b_v4_original_order",
+      "n": 64,
+      "nmse": 0.17663379631729967,
+      "win_rate": 0.1875
+    },
+    {
+      "horizon": 24,
+      "method": "moirai_direct",
+      "n": 64,
+      "nmse": 0.10535316162010899,
+      "win_rate": 0.515625
+    },
+    {
+      "horizon": 24,
+      "method": "persistence",
+      "n": 64,
+      "nmse": 0.09957023580297941,
+      "win_rate": 0.0
+    },
+    {
+      "horizon": 96,
+      "method": "b_reranked",
+      "n": 64,
+      "nmse": 0.3943662868896511,
+      "win_rate": 0.46875
+    },
+    {
+      "horizon": 96,
+      "method": "b_v4_original_order",
+      "n": 64,
+      "nmse": 0.41025116625426544,
+      "win_rate": 0.46875
+    },
+    {
+      "horizon": 96,
+      "method": "moirai_direct",
+      "n": 64,
+      "nmse": 0.4316722729538481,
+      "win_rate": 0.375
+    },
+    {
+      "horizon": 96,
+      "method": "persistence",
+      "n": 64,
+      "nmse": 0.4004575440295655,
+      "win_rate": 0.0
+    },
+    {
+      "horizon": 244,
+      "method": "b_reranked",
+      "n": 64,
+      "nmse": 0.8423324352915462,
+      "win_rate": 0.59375
+    },
+    {
+      "horizon": 244,
+      "method": "b_v4_original_order",
+      "n": 64,
+      "nmse": 0.8442069713866411,
+      "win_rate": 0.609375
+    },
+    {
+      "horizon": 244,
+      "method": "moirai_direct",
+      "n": 64,
+      "nmse": 1.0037106245495535,
+      "win_rate": 0.46875
+    },
+    {
+      "horizon": 244,
+      "method": "persistence",
+      "n": 64,
+      "nmse": 1.0296088941673127,
+      "win_rate": 0.0
+    }
+  ],
+  "paired": [
+    {
+      "left": "b_reranked",
+      "right": "b_v4_original_order",
+      "horizon": 24,
+      "n": 64,
+      "mean_improvement": 0.06747760508265431,
+      "win_rate": 0.703125,
+      "series_clusters": 4,
+      "cluster_bootstrap_95": [
+        0.033227892653570706,
+        0.10172731751173789
+      ]
+    },
+    {
+      "left": "b_reranked",
+      "right": "b_v4_original_order",
+      "horizon": 96,
+      "n": 64,
+      "mean_improvement": 0.015884879364614402,
+      "win_rate": 0.5,
+      "series_clusters": 4,
+      "cluster_bootstrap_95": [
+        -0.035401778755811915,
+        0.07944063532711779
+      ]
+    },
+    {
+      "left": "b_reranked",
+      "right": "b_v4_original_order",
+      "horizon": 244,
+      "n": 64,
+      "mean_improvement": 0.0018745360950948795,
+      "win_rate": 0.40625,
+      "series_clusters": 4,
+      "cluster_bootstrap_95": [
+        -0.09544125224871985,
+        0.09118033866418422
+      ]
+    },
+    {
+      "left": "b_reranked",
+      "right": "moirai_direct",
+      "horizon": 24,
+      "n": 64,
+      "mean_improvement": -0.0038030296145363813,
+      "win_rate": 0.453125,
+      "series_clusters": 4,
+      "cluster_bootstrap_95": [
+        -0.021161539086236254,
+        0.012329033798775643
+      ]
+    },
+    {
+      "left": "b_reranked",
+      "right": "moirai_direct",
+      "horizon": 96,
+      "n": 64,
+      "mean_improvement": 0.03730598606419698,
+      "win_rate": 0.546875,
+      "series_clusters": 4,
+      "cluster_bootstrap_95": [
+        -0.022162424095496513,
+        0.0866378806786066
+      ]
+    },
+    {
+      "left": "b_reranked",
+      "right": "moirai_direct",
+      "horizon": 244,
+      "n": 64,
+      "mean_improvement": 0.16137818925800732,
+      "win_rate": 0.609375,
+      "series_clusters": 4,
+      "cluster_bootstrap_95": [
+        0.06777877441325773,
+        0.30692510823757213
+      ]
+    }
+  ],
+  "timing": [
+    {
+      "method": "b_reranked",
+      "p50_ms": 188.3013500009838,
+      "p95_ms": 230.7635250002931,
+      "max_ms": 247.01590000040596,
+      "complete_topk_fraction": 1.0
+    }
+  ],
+  "caveat": "Few series imply weak bootstrap evidence; compression fidelity is not measured by forecast error alone."
+}
