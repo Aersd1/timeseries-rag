@@ -254,7 +254,7 @@ class Library:
 
     def search(self, query, channel='learned', k=10, sid=None, group=None, query_start=None, query_sid=None,
                leaf_budget=0, time_budget_ms=0, exclude_span=None, capacity=None, candidate_filter=None,
-               candidate_backend='auto'):
+               candidate_backend='auto', selection='diverse'):
         """One pass with initial redundancy, no all-distance cache or adaptive rescans.
 
         An underfilled diverse result is explicitly marked incomplete. Increase
@@ -263,6 +263,8 @@ class Library:
         began = time.perf_counter(); q = np.asarray(query, dtype=np.float64)
         if q.ndim != 1 or not np.isfinite(q).all() or k < 1 or leaf_budget < 0 or time_budget_ms < 0:
             raise ValueError('Invalid query or search budget')
+        if selection not in ('diverse', 'ordinary'):
+            raise ValueError('Unknown candidate selection')
         if query_start is not None and query_sid is None and sid is None:
             raise ValueError('Provide query_sid to exclude the query in a cross-series search')
         if channel not in self.c['index']['channels']:
@@ -332,10 +334,11 @@ class Library:
         hits = best.hits()
         if candidate_filter is not None:
             hits=candidate_filter(hits)
-        selected = diverse(hits, k, length)
+        selected = diverse(hits, k, length) if selection == 'diverse' else hits[:k]
         return selected, dict(search_ms=(time.perf_counter()-began)*1000, leaves=leaves, nodes=visited,
                               scored=scored, eligible=eligible, candidates_retained=len(best),
                               capacity=capacity, candidate_backend='native' if use_native else 'numpy',
                               certified=not stopped, complete_topk=len(selected)==k,
-                              exact_diverse_topk=not stopped and len(selected)==k,
+                              exact_diverse_topk=selection=='diverse' and not stopped and len(selected)==k,
+                              selection=selection, exact_ordinary_topk=selection=='ordinary' and not stopped and len(selected)==k,
                               returned=len(selected), leaf_budget=leaf_budget, time_budget_ms=time_budget_ms)

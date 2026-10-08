@@ -26,7 +26,7 @@ def main():
     q.add_argument('--device', default='cpu')
     q = subs.add_parser('index-b')
     for k in ('store','config','output'): q.add_argument('--'+k, required=True)
-    for name in ('query-a','query-b'):
+    for name in ('query-a','query-b','query-a-rerank'):
         q = subs.add_parser(name)
         for k in ('store','index','history','output'): q.add_argument('--'+k, required=True)
         q.add_argument('--sid', required=True, type=int); q.add_argument('--start', required=True, type=int)
@@ -35,6 +35,11 @@ def main():
             q.add_argument('--checkpoint', required=True)
             q.add_argument('--channel', choices=('learned','history','joint'), default='joint')
             q.add_argument('--leaf-budget', type=int, default=0)
+        if name=='query-a-rerank':
+            q.add_argument('--checkpoint', required=True)
+            q.add_argument('--candidates', type=int, default=50)
+            q.add_argument('--top-k', type=int, default=5)
+            q.add_argument('--history-weight', type=float, default=.5)
     q = subs.add_parser('evaluate')
     for k in ('store','config','output'): q.add_argument('--'+k, required=True)
     for k in ('checkpoint-a','index-a','index-b','checkpoint-v6','index-v6'): q.add_argument('--'+k)
@@ -76,6 +81,11 @@ def main():
             from .retrieval import MoiraiRetriever
             engine=MoiraiRetriever(args['store'],args['checkpoint'],args['index'],args['device'])
             options=dict(channel=args['channel'],leaf_budget=args['leaf_budget'])
+        elif cmd=='query-a-rerank':
+            from .learned_rerank import LearnedMoiraiReranker
+            engine=LearnedMoiraiReranker(args['store'],args['checkpoint'],args['index'],args['device'],
+                args['candidates'],args['top_k'])
+            options=dict(history_weight=args['history_weight'])
         else:
             from .rerank import V4MoiraiReranker
             engine=V4MoiraiReranker(args['store'],args['index'],args['device']); options={}
