@@ -2,6 +2,7 @@ __pycache__/
 *.py[cod]
 .venv/
 .venv-moirai/
+.venv-moirai-gpu/
 .moirai-cache/
 v7/runs/
 venv/

@@ -15,7 +15,7 @@ from v7.model import MoiraiEncoder, load
 from v7.moirai import MoiraiAdapter
 from v7.retrieval import build as build_a, MoiraiRetriever
 from v7.rerank import future_scores, V4MoiraiReranker, build as build_b
-from v7.train import fit
+from v7.train import fit, FrozenFeatures, loss_for_batch
 from v7.evaluate import evaluate
 
 
@@ -103,6 +103,33 @@ class AdapterTests(unittest.TestCase):
             batch['y']*=10000
             b=model(batch['x'],batch['floor'])['learned']
         torch.testing.assert_close(a,b,rtol=0,atol=0)
+
+    def test_frozen_cache_preserves_loss_gradients_and_sample_alignment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c,path,_=fixture(Path(tmp))
+            ds=Windows(Path(tmp)/'store',c,'train')
+            try:
+                adapter=tiny_adapter(); model=MoiraiEncoder(c,adapter).eval()
+                cached=FrozenFeatures(ds,adapter,'cpu',batch_size=3)
+                # Shuffle the cached dataset and include a repeated position.
+                indices=[4,1,7,1,3,5]
+                batch=torch.utils.data.default_collate([cached[i] for i in indices])
+                torch.testing.assert_close(batch['moirai_signature'],adapter.encode(batch['x']),rtol=1e-5,atol=1e-5)
+                raw=dict(batch);raw.pop('moirai_signature')
+                first,_=loss_for_batch(model,raw);first.backward()
+                gradients={n:p.grad.clone() for n,p in model.named_parameters() if p.grad is not None}
+                model.zero_grad(set_to_none=True)
+                with patch.object(adapter,'encode',side_effect=AssertionError('Cache must avoid inference')):
+                    second,_=loss_for_batch(model,batch);second.backward()
+                torch.testing.assert_close(first,second,rtol=1e-5,atol=1e-5)
+                for n,p in model.named_parameters():
+                    if n in gradients: torch.testing.assert_close(gradients[n],p.grad,rtol=1e-4,atol=1e-5)
+                self.assertIsNone(model.prior._signature)
+                with self.assertRaises(RuntimeError):
+                    with model.prior.cached_signature(batch['moirai_signature']):
+                        raise RuntimeError('A failed loss must clear the override')
+                self.assertIsNone(model.prior._signature)
+            finally: ds.store.close()
         self.assertNotIn('y',inspect.signature(MoiraiRetriever.retrieve).parameters)
         self.assertNotIn('y',inspect.signature(V4MoiraiReranker.retrieve).parameters)
 

@@ -20,6 +20,7 @@ def main():
     q = subs.add_parser('train-a')
     for k in ('config','store','output'): q.add_argument('--'+k, required=True)
     q.add_argument('--device', default='cpu')
+    q.add_argument('--no-feature-cache', action='store_true', help='Recompute frozen Moirai features in every training batch')
     q = subs.add_parser('index-a')
     for k in ('store','checkpoint','output'): q.add_argument('--'+k, required=True)
     q.add_argument('--device', default='cpu')
@@ -60,7 +61,7 @@ def main():
         result = ingest(args['config'],args['output']); print(dict(points=result['total_points']))
     elif cmd=='train-a':
         from .train import fit
-        print(fit(args['store'],args['config'],args['output'],args['device']))
+        print(fit(args['store'],args['config'],args['output'],args['device'],cache_features=not args['no_feature_cache']))
     elif cmd=='index-a':
         from .retrieval import build
         result=build(args['store'],args['checkpoint'],args['output'],args['device'])

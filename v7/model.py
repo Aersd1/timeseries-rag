@@ -1,6 +1,7 @@
 """Variant A: replace V6 Gaussian-prior/CDF features with Moirai hidden states."""
 import torch
 from torch import nn
+from contextlib import contextmanager
 from v6.model import BeliefEncoder, make_backbone, normalize
 
 
@@ -8,10 +9,25 @@ class RepresentationPrior(nn.Module):
     def __init__(self, adapter):
         super().__init__()
         self.adapter = adapter
+        self._signature = None
+
+    @contextmanager
+    def cached_signature(self, signature):
+        """A single loss call may reuse an immutable history-only representation."""
+        if self._signature is not None:
+            raise RuntimeError('Nested signature overrides are not supported')
+        self._signature = signature
+        try:
+            yield
+        finally:
+            self._signature = None
 
     def forward(self, x, floor):
         normalized, center, scale = normalize(x, floor)
-        return dict(signature=self.adapter.encode(x), normalized=normalized, center=center, scale=scale)
+        signature = self.adapter.encode(x) if self._signature is None else self._signature
+        if signature.shape != (len(x), self.adapter.module.d_model) or signature.device != x.device:
+            raise ValueError('Cached representation has an incompatible shape/device')
+        return dict(signature=signature.detach(), normalized=normalized, center=center, scale=scale)
 
 
 class MoiraiEncoder(BeliefEncoder):
