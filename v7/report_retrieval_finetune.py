@@ -17,6 +17,11 @@ def report(root, source):
     if not complete['complete']:
         raise ValueError('Incomplete fine-tuning experiment')
     results, training, audits, comparisons, horizons = [], [], [], [], []
+    variants = complete.get('variants', ['plain','rag'])
+    method_names = {'plain':'moirai_lora', 'rag':'moirai_rag_lora',
+        'rag_legacy':'moirai_legacy', 'rag_gated':'moirai_gated', 'rag_paired':'moirai_paired_nodrop'}
+    if any(v not in method_names for v in variants) or 'plain' not in variants or 'rag' not in variants:
+        raise ValueError('Expected known variants including plain and rag')
     all_curves = []
     for name in complete['datasets']:
         folder = root/name
@@ -68,7 +73,7 @@ def report(root, source):
         reference = previous[previous.method=='moirai_direct']
         tables = []
         curves = {}
-        for variant in ['plain','rag']:
+        for variant in variants:
             run = read(folder/variant/'run.json')
             assert run['complete'] and run['config']==c and run['data_id']==catalog['data_id']
             assert run['memory_sha256']==sha256(folder/'memory/manifest.json')
@@ -77,12 +82,18 @@ def report(root, source):
             best = min(history,key=lambda h:h['validation_nmse'])
             assert best['epoch']==run['best_epoch'] and np.isclose(best['validation_nmse'],run['best_validation'])
             state = torch.load(folder/variant/'best.pt', map_location='cpu', weights_only=True)
+            assert state.get('fusion','legacy')==run.get('fusion','legacy')
+            assert state['epoch']==run['best_epoch'] and state['memory_sha256']==run['memory_sha256']
+            for key in ['candidate_dropout','memory_dropout']:
+                assert state.get(key,0.)==run.get(key,0.)
             updated = {key:float(value.norm()) for key,value in state['adaptation'].items()
                 if '.b.weight' in key or key=='retrieval.output.weight'}
             training.append(dict(dataset=name,variant=variant,best_epoch=run['best_epoch'],
                 epochs=run['epochs_limit'], trainable_parameters=run['trainable_parameters'],
                 best_validation=run['best_validation'], initial_validation=history[0]['validation_nmse'],
-                total_seconds=run['total_seconds'], update_norms=updated))
+                total_seconds=run['total_seconds'], update_norms=updated,
+                fusion=run.get('fusion','legacy'), candidate_dropout=run.get('candidate_dropout',0.),
+                memory_dropout=run.get('memory_dropout',0.)))
             metrics = pd.read_json(folder/variant/'metrics.jsonl', lines=True)
             assert np.isfinite(metrics[['mse','mae','nmse']]).all().all()
             assert not metrics.duplicated(keys+['method']).any()
@@ -92,7 +103,7 @@ def report(root, source):
             matched = metrics[metrics.method=='frozen'].merge(reference,on=keys,validate='one_to_one')
             np.testing.assert_allclose(matched.nmse_x,matched.nmse_y,rtol=1e-5,atol=1e-5)
             selected = metrics[metrics.method=='finetuned'].copy()
-            selected['method'] = 'moirai_lora' if variant=='plain' else 'moirai_rag_lora'
+            selected['method'] = method_names[variant]
             tables.append(selected)
             if variant=='rag':
                 disabled=metrics[metrics.method=='memory_disabled'].copy()
@@ -113,7 +124,8 @@ def report(root, source):
         means = data.groupby('method').nmse.mean().to_dict()
         results.append(dict(dataset=name,queries=len(reference)//len(c['horizons']),**means))
         pivot = data.pivot(index=keys,columns='method',values='nmse')
-        for baseline in ['moirai_frozen','moirai_lora','a50_analog','rag_memory_disabled']:
+        for baseline in ['moirai_frozen','moirai_lora','a50_analog','rag_memory_disabled']+[
+                method_names[v] for v in variants if v not in ['plain','rag']]:
             delta = pivot[baseline]-pivot.moirai_rag_lora
             series = delta.groupby('sid').mean()
             comparisons.append(dict(dataset=name,baseline=baseline,method='moirai_rag_lora',

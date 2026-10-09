@@ -35,7 +35,9 @@ def predict(store, checkpoint_a, index_a, checkpoint, x, sid, start, device='cpu
         adapter = MoiraiAdapter.pretrained(c['moirai'], device)
         if adapter.architecture != state['architecture'] or adapter.identity != state['identity']:
             raise ValueError('Pretrained model identity changed')
-        model = RetrievalFineTune(adapter,m,h,state['use_retrieval'],state['rank']).to(device)
+        model = RetrievalFineTune(adapter,m,h,state['use_retrieval'],state['rank'],
+            fusion=state.get('fusion','legacy'), candidate_dropout=state.get('candidate_dropout',0.),
+            memory_dropout=state.get('memory_dropout',0.)).to(device)
         model.load_adaptation(state['adaptation']); model.eval()
         with torch.no_grad():
             inputs = [torch.as_tensor(v[None],device=device) for v in [np.asarray(x,np.float32),examples,weights,valid]]
@@ -44,6 +46,7 @@ def predict(store, checkpoint_a, index_a, checkpoint, x, sid, start, device='cpu
         return dict(prediction=quantiles[levels.index(.5)].tolist(), quantiles=quantiles.tolist(),
             quantile_levels=levels, hits=result['hits'], history_weight=.2, future_weight=.8,
             best_epoch=state['epoch'], use_retrieval=state['use_retrieval'],
+            fusion=state.get('fusion','legacy'),
             frozen_prediction=result['direct_prediction'].tolist(), analog_prediction=result['prediction'].tolist())
     finally:
         engine.close()

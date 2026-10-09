@@ -45,7 +45,8 @@ def validation_score(model, data, c, stds, batch_size, device, use_retrieval):
     return score
 
 
-def train(root, source, name, variant, device='cuda', epochs=8, batch_size=16):
+def train(root, source, name, variant, device='cuda', epochs=8, batch_size=16,
+        fusion='legacy', candidate_dropout=0., memory_dropout=0.):
     dataset_root = root/name
     memory = dataset_root/'memory'
     meta = json.loads((memory/'manifest.json').read_text())
@@ -55,11 +56,12 @@ def train(root, source, name, variant, device='cuda', epochs=8, batch_size=16):
         if sha256(memory/(split+'.npz')) != meta['splits'][split]['sha256']:
             raise ValueError('Memory artifact changed')
     c = meta['config']
-    use_retrieval = variant == 'rag'
+    use_retrieval = variant != 'plain'
     out = fresh_dir(dataset_root/variant)
     torch.manual_seed(c['seed'])
     adapter = MoiraiAdapter.pretrained(c['moirai'], device)
-    model = RetrievalFineTune(adapter, c['length'], max(c['horizons']), use_retrieval=use_retrieval).to(device)
+    model = RetrievalFineTune(adapter, c['length'], max(c['horizons']), use_retrieval=use_retrieval,
+        fusion=fusion, candidate_dropout=candidate_dropout, memory_dropout=memory_dropout).to(device)
     train_data, val_data = CachedMemory(memory/'train.npz'), CachedMemory(memory/'validation.npz')
     catalog = json.loads((source/name/'store/catalog.json').read_text())
     assert catalog['data_id']==meta['data_id']
@@ -73,6 +75,7 @@ def train(root, source, name, variant, device='cuda', epochs=8, batch_size=16):
         memory_sha256=sha256(memory/'manifest.json'), data_id=meta['data_id'],
         selection='Validation mean NMSE over horizons; epoch 0 is an eligible unchanged pretrained baseline.',
         train_windows=len(train_data), validation_windows=len(val_data))
+    run.update(fusion=fusion, candidate_dropout=candidate_dropout, memory_dropout=memory_dropout)
     write_json(out/'run.json', run)
     history, best_epoch = [], 0
     began = time.perf_counter()
@@ -83,6 +86,7 @@ def train(root, source, name, variant, device='cuda', epochs=8, batch_size=16):
         save_torch(out/'best.pt', dict(version=7, variant='moirai_retrieval_finetune',
             adaptation=model.adaptation_state(), config=c, use_retrieval=use_retrieval,
             architecture=model.architecture, identity=model.identity, rank=model.rank,
+            fusion=fusion, candidate_dropout=candidate_dropout, memory_dropout=memory_dropout,
             epoch=epoch, validation_nmse=score, memory_sha256=run['memory_sha256']))
 
     save_best(0, best)
@@ -127,6 +131,8 @@ def train(root, source, name, variant, device='cuda', epochs=8, batch_size=16):
             batch = {key:value.to(device) for key,value in batch.items()}
             qpred = forecast(model, batch, use_retrieval)
             pred = qpred[:, median]
+            gate = getattr(model.retrieval, 'last_gate', None)
+            gate = gate.reshape(len(pred), -1).mean(-1).cpu().tolist() if gate is not None else None
             # Same fine-tuned model, memory disabled: diagnostic, never a selection criterion.
             without = forecast(model, batch, False)[:, median] if use_retrieval else pred
             for i in range(len(pred)):
@@ -143,7 +149,8 @@ def train(root, source, name, variant, device='cuda', epochs=8, batch_size=16):
                         metrics.append(dict(query=qi, sid=sid, start=start, horizon=h, method=method,
                             mse=mse, mae=float(np.abs(error).mean()), nmse=mse/max(catalog['series'][sid]['memory_std'], 1e-6)**2))
                 forecasts.append(dict(query=qi, sid=sid, start=start, prediction=candidates['finetuned'].tolist(),
-                    memory_disabled=candidates.get('memory_disabled', candidates['finetuned']).tolist()))
+                    memory_disabled=candidates.get('memory_disabled', candidates['finetuned']).tolist(),
+                    gate_mean=None if gate is None else gate[i]))
                 qi += 1
     with (out/'metrics.jsonl').open('w', encoding='utf-8') as f:
         for record in metrics:
@@ -161,9 +168,13 @@ if __name__ == '__main__':
     parser.add_argument('--root', default='v7/runs/moirai_rag_finetune_20261008')
     parser.add_argument('--source', default='v7/runs/all_datasets_20261008')
     parser.add_argument('--dataset', required=True)
-    parser.add_argument('--variant', choices=['plain','rag'], required=True)
+    parser.add_argument('--variant', choices=['plain','rag','rag_gated','rag_paired'], required=True)
+    parser.add_argument('--fusion', choices=['legacy','gated','paired'], default='legacy')
+    parser.add_argument('--candidate-dropout', type=float, default=0.)
+    parser.add_argument('--memory-dropout', type=float, default=0.)
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--epochs', type=int, default=8)
     parser.add_argument('--batch-size', type=int, default=16)
     args = parser.parse_args()
-    train(Path(args.root), Path(args.source), args.dataset, args.variant, args.device, args.epochs, args.batch_size)
+    train(Path(args.root), Path(args.source), args.dataset, args.variant, args.device, args.epochs, args.batch_size,
+        args.fusion, args.candidate_dropout, args.memory_dropout)

@@ -98,3 +98,52 @@ The query command accepts observed history only. It loads pinned pretrained
 Moirai weights plus the selected adaptation, independently computes the frozen
 top-five retrieval memory, and returns the model's quantile forecast and the
 actual historical candidates used.
+
+## Gated historical auxiliaries
+
+The original `legacy` architecture remains available and loads existing
+checkpoints without migration. Two additional architectures are selectable:
+
+- `gated`: preserve the original patch memory, then multiply its hidden-state
+  residual by a learned sigmoid gate for each hidden token.
+- `paired`: encode each candidate history into a relevance key with an ordered
+  window MLP; independently encode its known continuation into a value. Attend
+  over five candidate pairs using the query representation and reranking prior.
+  Apply the same learned residual gate. A continuation cannot alter its own key.
+
+Both gates use query and retrieved representations plus four query-level
+quality features: effective valid-candidate fraction, normalized prior entropy,
+weighted continuation disagreement and history mismatch to the normalized
+query. The masked candidates contribute to neither quality features nor the
+attention output. Query future labels are not accepted by the forward API.
+The gate bias starts at -2 and the residual output projection starts at zero,
+so all variants initially reproduce the pretrained forecast exactly. Empty
+memory gives an exactly zero residual, including after training.
+
+The complete paired variant additionally drops each candidate independently
+with probability 0.2 and disables all memory for a query with probability 0.1
+during training. Dropout is disabled for validation and inference. It never
+changes the cached ranking, the top-five selection or the fixed 0.8/0.2 score.
+All-dropped examples are deliberately retained as valid training situations.
+
+Run the matched ablation benchmark against a completed original experiment:
+
+```powershell
+python -m v7.benchmark_gated_fusion --previous path/to/original-finetune --source path/to/benchmark --output path/to/new-fusion-run --device cuda
+```
+
+The runner copies and verifies the old memory and LoRA/legacy controls, then
+trains gate-only, paired-without-dropout and paired-with-dropout variants. It
+inherits the control's epoch and batch-size budget, seed, windows and batch
+order. Every new checkpoint is selected by validation NMSE, with epoch zero
+eligible. The report audits exact query identities, candidate boundaries,
+cached values and artifact hashes. Different trainable parameter counts and
+the changed paired-memory encoding remain interpretation limitations.
+
+The complete model is saved under `<dataset>/rag/best.pt`; the paired model
+without dropout under `rag_paired`, and the gate-only model under `rag_gated`.
+The existing history-only query command detects the saved fusion architecture
+and loads its adapters. `gate_mean` in saved benchmark predictions is a
+diagnostic average over hidden tokens and quantile trajectories at the final
+recursive encoder call. It is not a calibrated confidence score or a literal
+percentage contribution to the forecast.
