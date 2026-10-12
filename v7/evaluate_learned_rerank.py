@@ -39,7 +39,7 @@ def select_weight(tables, weights=WEIGHTS):
 def evaluate_dataset(source, output, name, split, weights, device):
     src = source/name
     out = fresh_dir(output/name/split)
-    engine = LearnedMoiraiReranker(src/'store', src/'train/best.pt', src/'index_a', device)
+    engine = LearnedMoiraiReranker(src/'store', src/'train/best.pt', src/'index_a', device,candidates=50)
     dataset = Windows(src/'store', engine.c, split)
     run = dict(complete=False, dataset=name, split=split, queries=len(dataset), weights=weights,
         candidates=50, top_k=5, selection='ordinary', history_metric='separately standardized raw-history NMSE',

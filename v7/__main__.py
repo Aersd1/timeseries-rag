@@ -37,9 +37,11 @@ def main():
             q.add_argument('--leaf-budget', type=int, default=0)
         if name=='query-a-rerank':
             q.add_argument('--checkpoint', required=True)
-            q.add_argument('--candidates', type=int, default=50)
+            q.add_argument('--candidates', type=int, default=100)
             q.add_argument('--top-k', type=int, default=5)
-            q.add_argument('--history-weight', type=float, default=.5)
+            q.add_argument('--history-weight', type=float, default=.2)
+            q.add_argument('--diversity-weight', type=float, default=0.)
+            q.add_argument('--quality-gate', help='Validated reliability checkpoint; uses its saved selection/fusion policy')
     q = subs.add_parser('evaluate')
     for k in ('store','config','output'): q.add_argument('--'+k, required=True)
     for k in ('checkpoint-a','index-a','index-b','checkpoint-v6','index-v6'): q.add_argument('--'+k)
@@ -77,6 +79,15 @@ def main():
     elif cmd.startswith('query-'):
         import numpy as np
         if Path(args['output']).exists(): raise FileExistsError('Choose a fresh query output')
+        if cmd=='query-a-rerank' and args['quality_gate']:
+            if args['candidates']!=100 or args['top_k']!=5 or args['history_weight']!=.2:
+                raise ValueError('Reliability checkpoints require fixed A100/top5/0.2 history policy')
+            from .query_a100_quality import predict
+            result=predict(args['quality_gate'],args['store'],args['checkpoint'],args['index'],
+                np.load(args['history'],allow_pickle=False),args['sid'],args['start'],args['device'])
+            write_json(args['output'],serializable(result))
+            print(json.dumps(dict(analogue_alpha=result['analogue_alpha'],adopted=result['adopted'],candidates=100),indent=2))
+            return
         if cmd=='query-a':
             from .retrieval import MoiraiRetriever
             engine=MoiraiRetriever(args['store'],args['checkpoint'],args['index'],args['device'])
@@ -85,7 +96,7 @@ def main():
             from .learned_rerank import LearnedMoiraiReranker
             engine=LearnedMoiraiReranker(args['store'],args['checkpoint'],args['index'],args['device'],
                 args['candidates'],args['top_k'])
-            options=dict(history_weight=args['history_weight'])
+            options=dict(history_weight=args['history_weight'],diversity_weight=args['diversity_weight'])
         else:
             from .rerank import V4MoiraiReranker
             engine=V4MoiraiReranker(args['store'],args['index'],args['device']); options={}

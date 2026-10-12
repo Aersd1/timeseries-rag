@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 from v6.data import Windows
-from v7.learned_rerank import LearnedMoiraiReranker, history_scores, blend_scores
+from v7.learned_rerank import LearnedMoiraiReranker, history_scores, blend_scores, diverse_selection
 from v7.evaluate_learned_rerank import select_weight
 from v7.tests.test_variants import fixture, tiny_adapter
 from v7.train import fit
@@ -37,28 +37,28 @@ class LearnedRerankTests(unittest.TestCase):
         with self.assertRaises(ValueError): select_weight({'fixture':frame.assign(split='test')}, [.2, .8])
         with self.assertRaises(ValueError): select_weight({'fixture':frame}, [0.])
 
-    def test_top50_matches_exhaustive_and_respects_memory(self):
+    def test_top100_matches_exhaustive_reproduces_top50_and_respects_memory(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             c, cp, _ = fixture(root)
             with patch('v7.train.MoiraiAdapter.pretrained', return_value=tiny_adapter()):
                 fit(root/'store', cp, root/'train')
             build(root/'store', root/'train/best.pt', root/'index')
-            engine = LearnedMoiraiReranker(root/'store', root/'train/best.pt', root/'index')
+            engine = LearnedMoiraiReranker(root/'store', root/'train/best.pt', root/'index',candidates=100)
             dataset = Windows(root/'store', c, 'test')
             item = dataset[0]
             try:
                 with patch.object(engine.base.library, 'search', wraps=engine.base.library.search) as search:
                     pool = engine.prepare(item['x'], 0, int(item['start']))
                     self.assertEqual(search.call_count, 1)
-                self.assertEqual(len(pool['candidates']), 50)
+                self.assertEqual(len(pool['candidates']), 100)
                 vector = engine.base.encode(item['x'], 0)[0]['learned'].astype(float)
                 exhaustive = []
                 for i, shard in enumerate(engine.base.library.meta['shards']):
                     vectors = engine.base.library.array(i, 'learned/vectors.npy').astype(float)
                     starts = np.array(engine.base.library.array(i, 'learned/starts.npy'), copy=True)
                     exhaustive.extend(zip(np.sum((vectors-vector)**2, axis=1), starts))
-                expected = sorted(exhaustive, key=lambda r:(r[0], r[1]))[:50]
+                expected = sorted(exhaustive, key=lambda r:(r[0], r[1]))[:100]
                 self.assertEqual([h['start'] for h in pool['candidates']], [int(r[1]) for r in expected])
                 np.testing.assert_allclose([h['distance'] for h in pool['candidates']], [r[0] for r in expected], rtol=1e-10)
                 # Original default search still returns non-overlapping histories.
@@ -70,6 +70,14 @@ class LearnedRerankTests(unittest.TestCase):
                 self.assertEqual(len(result['hits']), 5)
                 self.assertAlmostEqual(sum(h['weight'] for h in result['hits']), 1.)
                 self.assertTrue(np.isfinite(result['prediction']).all())
+                first50={**pool,'candidates':pool['candidates'][:50],'mapped':pool['mapped'][:50],
+                    'future_scores':pool['future_scores'][:50],'history_scores':pool['history_scores'][:50]}
+                engine50=LearnedMoiraiReranker(root/'store',root/'train/best.pt',root/'index',candidates=50)
+                try:
+                    original50=engine50.prepare(item['x'],0,int(item['start']))
+                    self.assertEqual([h['start'] for h in first50['candidates']],[h['start'] for h in original50['candidates']])
+                    np.testing.assert_allclose(engine.rank(first50,.2)['prediction'],engine50.rank(original50,.2)['prediction'])
+                finally: engine50.close()
                 with self.assertRaises(ValueError): engine.prepare(item['x'], 0, 0)
                 with patch.object(engine.base.library, 'search', return_value=([], {})):
                     empty = engine.prepare(item['x'], 0, int(item['start']))
@@ -77,6 +85,13 @@ class LearnedRerankTests(unittest.TestCase):
             finally:
                 engine.close()
                 dataset.store.close()
+
+    def test_soft_diversity_reduces_duplicates_and_preserves_zero_policy(self):
+        hits=[dict(sid=0,start=p,distance=i*.01) for i,p in enumerate([0,1,100,200,300])]
+        score=np.array([1.,1.01,1.1,1.2,1.3])
+        np.testing.assert_array_equal(diverse_selection(hits,score,3,100,0),[0,1,2])
+        np.testing.assert_array_equal(diverse_selection(hits,score,3,100,1),[0,2,3])
+        self.assertEqual(len(diverse_selection(hits[:2],score[:2],5,100,1)),2)
 
 
 if __name__ == '__main__':

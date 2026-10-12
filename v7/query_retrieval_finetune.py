@@ -20,7 +20,7 @@ def predict(store, checkpoint_a, index_a, checkpoint, x, sid, start, device='cpu
     if state.get('variant') != 'moirai_retrieval_finetune':
         raise ValueError('Expected fine-tuned Moirai artifact')
     c = state['config']
-    engine = LearnedMoiraiReranker(store, checkpoint_a, index_a, device)
+    engine = LearnedMoiraiReranker(store, checkpoint_a, index_a, device,candidates=50)
     try:
         if run['data_id'] != engine.store.meta['data_id'] or c != engine.c:
             raise ValueError('Fine-tuned model/retriever/store mismatch')

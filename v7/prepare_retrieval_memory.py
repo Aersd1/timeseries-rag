@@ -11,7 +11,7 @@ from .learned_rerank import LearnedMoiraiReranker
 def prepare(source, root, name, device='cpu'):
     src = source/name
     out = fresh_dir(root/name/'memory')
-    engine = LearnedMoiraiReranker(src/'store', src/'train/best.pt', src/'index_a', device)
+    engine = LearnedMoiraiReranker(src/'store', src/'train/best.pt', src/'index_a', device,candidates=50)
     c = engine.c
     run = dict(complete=False, dataset=name, config=c, retriever='a50_ordinary', candidates=50, top_k=5,
         future_weight=.8, history_weight=.2, scorer='frozen pretrained Moirai 2',
