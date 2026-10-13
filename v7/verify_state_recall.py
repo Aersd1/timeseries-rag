@@ -9,10 +9,13 @@ from .benefit_rerank import RIDGES,guarded_policy,apply_policy
 from .benchmark_state_recall import Builder,corrections,metric
 
 
-def verify(root,source):
+def verify(root,source,names=None):
     root=Path(root);audits=[]
+    if names and (root/'verification.json').exists():
+        audits=[x for x in json.loads((root/'verification.json').read_text(encoding='utf-8'))['audits'] if x['dataset'] not in names]
     for path in sorted(root.glob('*/run.json')):
         folder=path.parent;run=json.loads(path.read_text(encoding='utf-8'));cache=Path(run['source_cache'])
+        if names and folder.name not in names:continue
         assert sha256(cache/'manifest.json')==run['source_manifest_sha256']
         assert sha256(folder/'selection.json')==run['selection_sha256']
         selection=json.loads((folder/'selection.json').read_text(encoding='utf-8'))
@@ -57,4 +60,4 @@ def verify(root,source):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--root',required=True);p.add_argument('--source',default='v7/runs/all_datasets_20261008')
-    a=p.parse_args();verify(a.root,a.source)
+    p.add_argument('--datasets',nargs='+');a=p.parse_args();verify(a.root,a.source,a.datasets)

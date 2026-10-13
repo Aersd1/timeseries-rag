@@ -11,6 +11,9 @@ from .query_state_recall import predict
 
 def verify(root,source,names,device):
     records=[]
+    previous=Path(root)/'query_verification.json'
+    if previous.exists():
+        records=[x for x in json.loads(previous.read_text(encoding='utf-8'))['records'] if x['dataset'] not in names]
     for name in names:
         folder=Path(root)/name;run=json.loads((folder/'run.json').read_text(encoding='utf-8'))
         weight=run['selected_state_weight'];branch=folder/f'weight_{weight}'
