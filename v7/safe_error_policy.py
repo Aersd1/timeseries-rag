@@ -10,7 +10,7 @@ def bound_delta(delta,quantiles):
     return np.clip(np.asarray(delta,dtype=float),-radius,radius).astype(np.float32)
 
 
-def choose_policy(target,deltas,sids,starts):
+def choose_policy(target,deltas,sids,starts,require_mae=False):
     """Only validation targets; final block rejects the single chosen expert."""
     target=np.asarray(target,dtype=float);policies={}
     for sid in np.unique(sids):
@@ -25,13 +25,15 @@ def choose_policy(target,deltas,sids,starts):
                 rng=np.random.default_rng(20261013)
                 samples=gain[rng.integers(0,len(gain),size=(2000,len(gain)))].mean(1)
                 lower=float(np.quantile(samples,.05));wins=float(np.mean(gain>0))
-                if lower>.01*base.mean() and wins>=.75:
+                mae_ok=(not require_mae or np.mean(abs(target[fitted]-beta*values[fitted]))<np.mean(abs(target[fitted])))
+                if lower>.01*base.mean() and wins>=.75 and mae_ok:
                     eligible.append((float(loss.mean()),family,beta,lower,wins))
         if not eligible:policies[str(int(sid))]=default;continue
         _,family,beta,lower,wins=min(eligible)
         held=parts[2];baseline=np.mean(target[held]**2,axis=1)
         gain=baseline-np.mean((target[held]-beta*deltas[family][held])**2,axis=1)
-        confirmed=bool(gain.mean()>0 and np.mean(gain>0)>=.75)
+        mae_ok=(not require_mae or np.mean(abs(target[held]-beta*deltas[family][held]))<np.mean(abs(target[held])))
+        confirmed=bool(gain.mean()>0 and np.mean(gain>0)>=.75 and mae_ok)
         policies[str(int(sid))]=dict(family=family if confirmed else 'direct',beta=beta if confirmed else 0.,
             proposed_family=family,proposed_beta=beta,calibration_lower_gain=lower,calibration_win_fraction=wins,
             final_gain=float(gain.mean()),final_win_fraction=float(np.mean(gain>0)),
