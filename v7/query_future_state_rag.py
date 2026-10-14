@@ -62,11 +62,13 @@ class FutureStatePredictor:
         q=self.adapter.forecast(x[None],96).cpu().numpy();probe=self.adapter.forecast(x[None,:64],32).cpu().numpy()
         return self.predict_cached(x,sid,start,q,probe)
 
-    def predict_cached(self,history,sid,start,q,probe,metadata=None,return_components=False,validation=False):
+    def predict_cached(self,history,sid,start,q,probe,metadata=None,return_components=False,validation=False,training=False):
         """Replay fixed foundation outputs; validation is for calibration only."""
         x=np.asarray(history,dtype=np.float32);s=self.store.series[sid]
         if x.shape!=(96,) or not np.isfinite(x).all():raise ValueError('Expected finite96-point history')
-        if start<(s['train_end'] if validation else s['validation_end']):raise ValueError('History outside calibration/deployment split')
+        if training:
+            if validation or start<0 or start+192>s['train_end']:raise ValueError('Training reference outside completed TRAIN episode')
+        elif start<(s['train_end'] if validation else s['validation_end']):raise ValueError('History outside calibration/deployment split')
         grouped=getattr(self,'grouped',False)
         group=self.groups[str(sid)] if grouped else list(range(len(self.store.series)))
         local_sid=group.index(sid)

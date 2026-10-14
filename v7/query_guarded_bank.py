@@ -40,12 +40,12 @@ class GuardedBankPredictor:
         q=self.original.adapter.forecast(x[None],96).cpu().numpy();probe=self.original.adapter.forecast(x[None,:64],32).cpu().numpy()
         return self.predict_cached(x,sid,start,q,probe)
 
-    def predict_cached(self,history,sid,start,q,probe):
-        old=self.original.predict_cached(history,sid,start,q,probe,return_components=True)
+    def predict_cached(self,history,sid,start,q,probe,training=False,metadata=None,validation=False):
+        old=self.original.predict_cached(history,sid,start,q,probe,metadata=metadata,return_components=True,training=training,validation=validation)
         policy=self.policy[str(int(sid))];selected=old;forecast=old['forecasts']['routed']
         if policy['branch']!='incumbent':
             predictor=self._predictor(policy['branch'])
-            selected=old if predictor is self.original else predictor.predict_cached(history,sid,start,q,probe,return_components=True)
+            selected=old if predictor is self.original else predictor.predict_cached(history,sid,start,q,probe,return_components=True,training=training,validation=validation)
             c=selected['components'];independent=policy['family'].startswith('direct_')
             delta=(direct_experts(c) if independent else experts(c,selected['weights']))[policy['family']]
             base=q[0,4] if independent else c['final_base'];forecast=(base+policy['beta']*delta*c['std']).tolist()
