@@ -4,13 +4,14 @@ import numpy as np
 PENALTIES=[.1,1.,10.,100.]
 
 
-def history_features(history,starts,memory_mean,memory_std,period,weekly=False):
+def history_features(history,starts,memory_mean,memory_std,period,weekly=False,block_width=16):
     """History[N,96,C] only; retain physical state and relative dynamics."""
     x=np.asarray(history,dtype=float);mean=np.asarray(memory_mean);sd=np.maximum(memory_std,1e-6)
     if x.ndim!=3 or x.shape[1]!=96:raise ValueError('Expected multivariate96 history')
     valid=np.isfinite(x);x=np.where(valid,x,mean)
     level=x[:,-16:].mean(1);scale=np.maximum(x.std(1),.1*sd)
-    shape=((x-level[:,None,:])/scale[:,None,:]).reshape(len(x),6,16,x.shape[-1]).mean(2).reshape(len(x),-1)
+    if block_width not in (8,16):raise ValueError('Expected block width8 or16')
+    shape=((x-level[:,None,:])/scale[:,None,:]).reshape(len(x),96//block_width,block_width,x.shape[-1]).mean(2).reshape(len(x),-1)
     phase=2*np.pi*(np.asarray(starts)+96)/period
     annual=phase/365.2425
     state=np.c_[(level-mean)/sd,np.log(scale/sd),valid.mean(1)]
@@ -20,22 +21,24 @@ def history_features(history,starts,memory_mean,memory_std,period,weekly=False):
     return features
 
 
-def future_state(history,future,memory_std):
+def future_state(history,future,memory_std,block_width=16):
     """A supervision/prototype encoder for already known future blocks."""
     x=np.asarray(history,dtype=float);y=np.asarray(future,dtype=float)
     if x.shape!=y.shape or x.shape[1]!=96 or not np.isfinite(x).all() or not np.isfinite(y).all():raise ValueError('Finite paired96 multivariate episodes required')
     scale=np.maximum(x.std(1),.1*np.maximum(memory_std,1e-6))
     changes=(y-x[:,-16:].mean(1)[:,None,:])/scale[:,None,:]
-    return changes.reshape(len(x),6,16,x.shape[-1]).mean(2).reshape(len(x),-1).astype(np.float32)
+    if block_width not in (8,16):raise ValueError('Expected block width8 or16')
+    return changes.reshape(len(x),96//block_width,block_width,x.shape[-1]).mean(2).reshape(len(x),-1).astype(np.float32)
 
 
-def prototype_state(history,future,memory_mean,memory_std):
+def prototype_state(history,future,memory_mean,memory_std,block_width=16):
     """Missing sibling channels are masked, never fabricated as known futures."""
     x=np.asarray(history,dtype=float);y=np.asarray(future,dtype=float)
-    past_valid=np.isfinite(x).all(1);future_valid=np.isfinite(y).reshape(len(y),6,16,y.shape[-1]).all(2)
+    if block_width not in (8,16):raise ValueError('Expected block width8 or16')
+    past_valid=np.isfinite(x).all(1);future_valid=np.isfinite(y).reshape(len(y),96//block_width,block_width,y.shape[-1]).all(2)
     mask=(future_valid&past_valid[:,None,:]).reshape(len(y),-1)
     safe_x=np.where(np.isfinite(x),x,np.asarray(memory_mean));safe_y=np.where(np.isfinite(y),y,np.asarray(memory_mean))
-    code=future_state(safe_x,safe_y,memory_std);code[~mask]=0
+    code=future_state(safe_x,safe_y,memory_std,block_width);code[~mask]=0
     return dict(values=code,mask=mask)
 
 
@@ -69,3 +72,27 @@ def train(features,labels,starts):
     precision=1/np.maximum(error,.1);precision=np.clip(precision/max(float(np.median(precision)),1e-6),.05,20.)
     state=fit(features,labels,penalty);state['precision']=precision
     return state,dict(penalty=penalty,losses=losses,folds=folds,queries=len(features)),rows,oof
+
+
+def decode(code,channels,block_width=16):
+    values=np.asarray(code).reshape(96//block_width,channels)
+    centers=np.arange(96//block_width)*block_width+(block_width-1)/2
+    return np.stack([np.interp(np.arange(96),centers,values[:,c]) for c in range(channels)],axis=1)
+
+
+def train_resolution(history,future,starts,means,stds,period,weekly=False):
+    """Choose state resolution on purged training predictions at a common96-point loss."""
+    h=history_features(history,starts,means,stds,period,weekly,block_width=8)
+    scale=np.maximum(np.asarray(history,dtype=float).std(1),.1*np.maximum(stds,1e-6))
+    actual=(future-history[:,-16:].mean(1)[:,None,:])/scale[:,None,:]
+    candidates={};losses={}
+    for width in [8,16]:
+        result=train(h,future_state(history,future,stds,width),starts)
+        state,selection,rows,oof=result
+        error=np.stack([decode(p,history.shape[-1],width) for p in oof])-actual[rows]
+        losses[str(width)]=float(np.mean(error**2));candidates[width]=result
+    width=min([8,16],key=lambda w:(losses[str(w)],-w))
+    state,selection,rows,oof=candidates[width];state.update(block_width=width,history_width=8)
+    selection.update(block_width=width,history_width=8,resolution_losses=losses,
+        resolution_rule='Common full96-point normalized future loss on training forward folds only')
+    return state,selection,rows,oof

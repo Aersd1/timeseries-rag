@@ -11,12 +11,13 @@ from .query_past_error_adapter import scale_data
 from .past_error_adapter import feature
 from .benefit_rerank import covariance
 from .safe_error_policy import bound_delta,apply_policy
-from .future_state_encoder import history_features,prototype_state,predict
+from .future_state_encoder import history_features,prototype_state,predict,decode
 from .benchmark_future_state_rag import retrieve_forecast
+from .complementary_rag import candidate_innovations
 
 
 class FutureStatePredictor:
-    def __init__(self,store_path,folder,device='cuda'):
+    def __init__(self,store_path,folder,device='cuda',adapter=None):
         self.folder=Path(folder);self.run=json.loads((self.folder/'run.json').read_text(encoding='utf-8'))
         self.checkpoint=Path(self.run['source_checkpoint']);self.base_run=json.loads((self.checkpoint/'run.json').read_text(encoding='utf-8'))
         self.cache=Path(self.base_run['source_cache']);self.meta=json.loads((self.cache/'manifest.json').read_text(encoding='utf-8'))
@@ -40,7 +41,7 @@ class FutureStatePredictor:
         if self.store.meta['data_id']!=self.base_run['source_data_id']:raise ValueError('Wrong synchronous store')
         self.means=np.array([s['memory_mean'] for s in self.store.series]);self.stds=np.array([max(s['memory_std'],1e-6) for s in self.store.series])
         self.synchronous_values=[np.array(self.store.values(s['sid']),dtype=np.float32) for s in self.store.series]
-        self.adapter=MoiraiAdapter.pretrained(self.meta['moirai'],device);self.pools={};self.base_states={}
+        self.adapter=adapter if adapter is not None else MoiraiAdapter.pretrained(self.meta['moirai'],device);self.pools={};self.base_states={}
 
     def close(self):self.store.close()
 
@@ -51,9 +52,16 @@ class FutureStatePredictor:
         return x
 
     def predict(self,history,sid,start):
+        x=np.asarray(history,dtype=np.float32)
+        if x.shape!=(96,) or not np.isfinite(x).all():raise ValueError('Expected finite96-point history')
+        q=self.adapter.forecast(x[None],96).cpu().numpy();probe=self.adapter.forecast(x[None,:64],32).cpu().numpy()
+        return self.predict_cached(x,sid,start,q,probe)
+
+    def predict_cached(self,history,sid,start,q,probe,metadata=None,return_components=False,validation=False):
+        """Replay fixed foundation outputs; validation is for calibration only."""
         x=np.asarray(history,dtype=np.float32);s=self.store.series[sid]
         if x.shape!=(96,) or not np.isfinite(x).all():raise ValueError('Expected finite96-point history')
-        if start<s['validation_end']:raise ValueError('Policy outcomes must already be observed')
+        if start<(s['train_end'] if validation else s['validation_end']):raise ValueError('History outside calibration/deployment split')
         grouped=getattr(self,'grouped',False)
         group=self.groups[str(sid)] if grouped else list(range(len(self.store.series)))
         local_sid=group.index(sid)
@@ -64,14 +72,16 @@ class FutureStatePredictor:
                 with np.load(self.folder/name,allow_pickle=False) as f:self.encoders[sid]={k:f[k].copy() for k in f.files}
             encoder=self.encoders[sid]
         else:encoder=self.encoder
-        q=self.adapter.forecast(x[None],96).cpu().numpy();probe=self.adapter.forecast(x[None,:64],32).cpu().numpy()
+        q=np.asarray(q);probe=np.asarray(probe)
+        if q.shape!=(1,9,96) or probe.shape!=(1,9,32):raise ValueError('Unexpected foundation output shape')
         known_error=x[None,64:]-probe[:,4]
         if sid not in self.pools:
             self.pools[sid]=ResidualPool(self.store,sid,self.meta['window'],stride=self.meta.get('memory_stride',1))
             name=f'past_{sid}_without_rag.npz'
             if sha256(self.checkpoint/name)!=self.base_run['past_hashes'][name]:raise ValueError('Changed base expert weights')
             with np.load(self.checkpoint/name,allow_pickle=False) as f:self.base_states[sid]={k:f[k].copy() for k in f.files}
-        _,m=retrieve(x,q[0],self.pools[sid],start,self.meta['window'])
+        if metadata is None:_,m=retrieve(x,q[0],self.pools[sid],start,self.meta['window'])
+        else:m=metadata
         std=np.float32(self.stds[sid]);data=dict(raw_x=x[None],raw_quantiles=q,base=q[:,4],std=np.array([std]),metric_std=np.array([std]),
             sid=np.array([sid]),start=np.array([start]),errors=np.zeros((1,5,96)),**{k:m[k][None] for k in ['weights','selected_starts','candidate_starts','history_scores','future_scores']})
         if self.base_run.get('annual_calendar'):data['annual_calendar']=True
@@ -80,17 +90,18 @@ class FutureStatePredictor:
         p=self.base_policies[str(sid)];beta=p.get('proposed_beta',0.)
         base=q[:,4]+beta*bound_delta(covariance(self.base_states[sid],f)*data['std'][:,None],q)
         joint=self.joint_window(start,96,group);joint[:,local_sid]=x
-        code=predict(encoder,history_features(joint[None],np.array([start]),self.means[group],self.stds[group],self.base_run['period'] or 1,weekly=grouped))[0]
+        width=int(encoder.get('block_width',16));history_width=int(encoder.get('history_width',16))
+        code=predict(encoder,history_features(joint[None],np.array([start]),self.means[group],self.stds[group],self.base_run['period'] or 1,weekly=grouped,block_width=history_width))[0]
         candidate_starts=m['candidate_starts']
         if np.any(candidate_starts+192>min(start,s['memory_end'])):raise ValueError('Self or overlapping future prototype')
         episodes=np.stack([self.joint_window(int(t),192,group) for t in candidate_starts]);past=episodes[:,:96];future=episodes[:,96:]
-        prototypes=prototype_state(past,future,self.means[group],self.stds[group])
+        prototypes=prototype_state(past,future,self.means[group],self.stds[group],width)
         order=np.argsort(candidate_starts);library=candidate_starts[order]
         prototypes={k:v[order] for k,v in prototypes.items()};past=past[order];future=future[order]
         weight=self.selection['groups'][str(sid)]['retrieval_weight'] if grouped else self.selection['retrieval_weight']
         rag,selected,weights=retrieve_forecast(data,0,base[0],code,encoder['precision'],None,prototypes,past,future,library,weight,channel_index=local_sid)
-        scale=max(float(x.std()),.1*self.stds[sid]);level=float(x[-16:].mean());values=code.reshape(6,len(group))[:,local_sid]
-        encoded_path=level+np.interp(np.arange(96),np.arange(6)*16+7.5,values)*scale
+        scale=max(float(x.std()),.1*self.stds[sid]);level=float(x[-16:].mean())
+        encoded_path=level+decode(code,len(group),width)[:,local_sid]*scale
         deltas={kind:bound_delta((v*std)[None],q)/std for kind,v in [('encoder_only',(encoded_path-base[0])/std),('future_state_rag',rag)]}
         for fraction in [.25,.5,.75]:deltas[f'mix_{fraction}']=(1-fraction)*deltas['encoder_only']+fraction*deltas['future_state_rag']
         final_base=base if p['beta']>0 or beta==0 else q[:,4]
@@ -98,6 +109,13 @@ class FutureStatePredictor:
         for kind in ['encoder_only','future_state_rag','routed']:
             supplied=deltas if kind=='routed' else {kind:deltas[kind]}
             forecasts[kind]=(final_base+apply_policy(self.policies[kind],supplied,np.array([sid]))*std)[0]
-        return dict(forecasts={k:v.tolist() for k,v in forecasts.items()},selected_starts=selected.tolist(),weights=weights.tolist(),
+        result=dict(forecasts={k:v.tolist() for k,v in forecasts.items()},selected_starts=selected.tolist(),weights=weights.tolist(),
             family=self.policies['routed'][str(sid)]['family'],beta=self.policies['routed'][str(sid)]['beta'],length=96,horizon=96,
             foundation_frozen=True,encoder='self-trained joint future-state ridge',query_future_used=False)
+        if return_components:
+            ids=np.searchsorted(library,selected)
+            cases=candidate_innovations(x,np.zeros(96),past[ids,:,local_sid],future[ids,:,local_sid],std)*std
+            result['components']=dict(base=base[0],final_base=final_base[0],encoded_path=encoded_path,
+                cases=cases,deltas={k:v[0] for k,v in deltas.items()},quantiles=q[0],std=std,
+                disabled=bool(p['beta']==0 and beta>0))
+        return result

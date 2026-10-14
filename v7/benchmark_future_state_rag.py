@@ -10,7 +10,7 @@ from .query_past_error_adapter import scale_data
 from .past_error_adapter import feature
 from .benefit_rerank import covariance
 from .safe_error_policy import bound_delta,choose_policy,apply_policy
-from .future_state_encoder import history_features,future_state,prototype_state,train,predict
+from .future_state_encoder import history_features,future_state,prototype_state,train,predict,train_resolution,decode
 from .learned_rerank import diverse_selection
 from .rerank import aggregate
 from .complementary_rag import candidate_innovations
@@ -35,7 +35,7 @@ def retrieve_forecast(data,i,base,query_code,precision,starts,codes,past,future,
     return delta.astype(np.float32),candidates[selected],w
 
 
-def experiment(checkpoint,complementary,source,out):
+def experiment(checkpoint,complementary,source,out,optimize_resolution=False):
     out.mkdir(parents=True,exist_ok=False);run=json.loads((checkpoint/'run.json').read_text(encoding='utf-8'))
     if run.get('online'):raise ValueError('Frozen baseline required')
     cache=Path(run['source_cache']);probes=Path(run['source_probes']);meta=json.loads((cache/'manifest.json').read_text(encoding='utf-8'))
@@ -56,12 +56,13 @@ def experiment(checkpoint,complementary,source,out):
         with np.load(probes/f'{sp}.npz',allow_pickle=False) as f:probe[sp]=f['error'].copy()
     unique=np.unique(data['train']['start']);unique=unique[np.array([np.isfinite(matrix[p:p+192]).all() for p in unique])]
     x=histories(unique);y=futures(unique);h=history_features(x,unique,means,stds,run['period'] or 1);code=future_state(x,y,stds)
-    state,selection,held,oof=train(h,code,unique);np.savez(out/'future_encoder.npz',**state)
+    state,selection,held,oof=train_resolution(x,y,unique,means,stds,run['period'] or 1) if optimize_resolution else train(h,code,unique)
+    width=int(state.get('block_width',16));history_width=int(state.get('history_width',16));np.savez(out/'future_encoder.npz',**state)
     lookup={int(unique[j]):oof[k] for k,j in enumerate(held)}
     memory_end=min(s['memory_end'] for s in store.series)
     library_starts=np.unique(np.concatenate([d['candidate_starts'].reshape(-1) for d in data.values()]))
     if np.any(library_starts+192>memory_end):raise ValueError('Unknown prototype futures')
-    past=histories(library_starts);future=futures(library_starts);codes=prototype_state(past,future,means,stds)
+    past=histories(library_starts);future=futures(library_starts);codes=prototype_state(past,future,means,stds,width)
     losses={str(w):[] for w in WEIGHTS};calibration_rows=0
     for s in store.series:
         sid=s['sid']
@@ -82,7 +83,7 @@ def experiment(checkpoint,complementary,source,out):
     try:
         for sp in ['validation','test']:
             current=data[sp];bases[sp]=np.zeros_like(current['base']);a=np.zeros_like(current['base']);b=np.zeros_like(current['base']);selected=np.zeros((len(a),5),dtype=np.int64)
-            joint=histories(current['start']);predicted=predict(state,history_features(joint,current['start'],means,stds,run['period'] or 1))
+            joint=histories(current['start']);predicted=predict(state,history_features(joint,current['start'],means,stds,run['period'] or 1,block_width=history_width))
             for s in store.series:
                 sid=s['sid'];rows=np.flatnonzero(current['sid']==sid);beta=policy_base[str(sid)].get('proposed_beta',0.)
                 with np.load(checkpoint/f'past_{sid}_without_rag.npz',allow_pickle=False) as f:base_state={k:f[k].copy() for k in f.files}
@@ -90,8 +91,7 @@ def experiment(checkpoint,complementary,source,out):
                 bases[sp][rows]=current['base'][rows]+beta*bound_delta(covariance(base_state,f)*current['std'][rows,None],current['raw_quantiles'][rows])
                 for i in rows:
                     scale=max(float(current['raw_x'][i].std()),.1*stds[sid]);center=float(current['raw_x'][i,-16:].mean())
-                    values=predicted[i].reshape(6,channels)[:,sid]
-                    path=center+np.interp(np.arange(96),np.arange(6)*16+7.5,values)*scale
+                    path=center+decode(predicted[i],channels,width)[:,sid]*scale
                     a[i]=(path-bases[sp][i])/current['metric_std'][i]
                     b[i],selected[i],_=retrieve_forecast(current,int(i),bases[sp][i],predicted[i],state['precision'],None,codes,past,future,library_starts,weight)
                 print('JOINT FUTURE',checkpoint.name,sp,sid+1,'/',channels,flush=True)
@@ -115,7 +115,7 @@ def experiment(checkpoint,complementary,source,out):
         truth={k:test[k] for k in ['raw_y','sid','start']};truth['std']=test['metric_std']
         np.savez_compressed(out/'predictions.npz',**forecasts,**truth,selected_starts=traces['test'])
         metrics={k:metric(v,truth) for k,v in forecasts.items()}
-        result=dict(complete=True,dataset=checkpoint.name,metrics=metrics,queries=len(test['sid']),variables=channels,
+        result=dict(complete=True,optimize_resolution=optimize_resolution,dataset=checkpoint.name,metrics=metrics,queries=len(test['sid']),variables=channels,
             gain_vs_direct_percent=100*(1-metrics['future_state_rag']['nmse']/metrics['moirai_direct']['nmse']),
             rag_vs_no_rag_percent=100*(1-metrics['future_state_rag']['nmse']/metrics['no_rag']['nmse']),
             rag_vs_encoder_only_percent=100*(1-metrics['future_state_rag']['nmse']/metrics['encoder_only']['nmse']),

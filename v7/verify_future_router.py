@@ -27,8 +27,8 @@ def verify(root,source,rebuild_root,names):
                 assert store.series[int(sid)]['validation_end']>=store.series[int(sid)]['train_end']
         finally:store.close()
         rebuilt=Path(rebuild_root)/name
-        if run.get('grouped'):group_experiment(checkpoint,Path(source)/name,rebuilt)
-        else:joint_experiment(checkpoint,Path(run['source_complementary']),Path(source)/name,rebuilt)
+        if run.get('grouped'):group_experiment(checkpoint,Path(source)/name,rebuilt,optimize_resolution=run.get('optimize_resolution',False))
+        else:joint_experiment(checkpoint,Path(run['source_complementary']),Path(source)/name,rebuilt,optimize_resolution=run.get('optimize_resolution',False))
         for path in folder.glob('*encoder*.npz'):
             with np.load(path,allow_pickle=False) as a,np.load(rebuilt/path.name,allow_pickle=False) as b:
                 assert a.files==b.files
