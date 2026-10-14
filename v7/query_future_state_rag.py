@@ -45,6 +45,11 @@ class FutureStatePredictor:
 
     def close(self):self.store.close()
 
+    def memory_limit(self,series):return series['memory_end']
+
+    def candidate_metadata(self,x,sid,start,quantiles,encoder,group):
+        return retrieve(x,quantiles,self.pools[sid],start,self.meta['window'])[1]
+
     def joint_window(self,start,length,channels=None):
         channels=list(range(len(self.store.series))) if channels is None else channels
         x=np.stack([self.synchronous_values[j][start:start+length] for j in channels],axis=1)
@@ -80,7 +85,7 @@ class FutureStatePredictor:
             name=f'past_{sid}_without_rag.npz'
             if sha256(self.checkpoint/name)!=self.base_run['past_hashes'][name]:raise ValueError('Changed base expert weights')
             with np.load(self.checkpoint/name,allow_pickle=False) as f:self.base_states[sid]={k:f[k].copy() for k in f.files}
-        if metadata is None:_,m=retrieve(x,q[0],self.pools[sid],start,self.meta['window'])
+        if metadata is None:m=self.candidate_metadata(x,sid,start,q[0],encoder,group)
         else:m=metadata
         std=np.float32(self.stds[sid]);data=dict(raw_x=x[None],raw_quantiles=q,base=q[:,4],std=np.array([std]),metric_std=np.array([std]),
             sid=np.array([sid]),start=np.array([start]),errors=np.zeros((1,5,96)),**{k:m[k][None] for k in ['weights','selected_starts','candidate_starts','history_scores','future_scores']})
@@ -93,7 +98,7 @@ class FutureStatePredictor:
         width=int(encoder.get('block_width',16));history_width=int(encoder.get('history_width',16))
         code=predict(encoder,history_features(joint[None],np.array([start]),self.means[group],self.stds[group],self.base_run['period'] or 1,weekly=grouped,block_width=history_width))[0]
         candidate_starts=m['candidate_starts']
-        if np.any(candidate_starts+192>min(start,s['memory_end'])):raise ValueError('Self or overlapping future prototype')
+        if np.any(candidate_starts+192>min(start,self.memory_limit(s))):raise ValueError('Self or overlapping future prototype')
         episodes=np.stack([self.joint_window(int(t),192,group) for t in candidate_starts]);past=episodes[:,:96];future=episodes[:,96:]
         prototypes=prototype_state(past,future,self.means[group],self.stds[group],width)
         order=np.argsort(candidate_starts);library=candidate_starts[order]
@@ -115,7 +120,14 @@ class FutureStatePredictor:
         if return_components:
             ids=np.searchsorted(library,selected)
             cases=candidate_innovations(x,np.zeros(96),past[ids,:,local_sid],future[ids,:,local_sid],std)*std
+            old_codes=predict(encoder,history_features(past[ids],library[ids],self.means[group],self.stds[group],
+                self.base_run['period'] or 1,weekly=grouped,block_width=history_width))
+            old_history=past[ids,:,local_sid]
+            old_scales=np.maximum(old_history.std(1),.1*self.stds[sid])
+            old_levels=old_history[:,-16:].mean(1)
+            old_paths=np.stack([old_levels[j]+decode(code,len(group),width)[:,local_sid]*old_scales[j] for j,code in enumerate(old_codes)])
+            old_mapped=candidate_innovations(x,np.zeros(96),old_history,old_paths,std)*std
             result['components']=dict(base=base[0],final_base=final_base[0],encoded_path=encoded_path,
-                cases=cases,deltas={k:v[0] for k,v in deltas.items()},quantiles=q[0],std=std,
+                cases=cases,old_encoded_paths=old_mapped,deltas={k:v[0] for k,v in deltas.items()},quantiles=q[0],std=std,
                 disabled=bool(p['beta']==0 and beta>0))
         return result
