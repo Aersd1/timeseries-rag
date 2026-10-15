@@ -84,6 +84,15 @@ def calibrate(val,pred,base=None):
     # The legacy reason labels are retained for frozen-policy replay; with
     # residual-reference inputs, rejection preserves F5 rather than Moirai.
     policies={};base=val.get('reference',val['raw_quantiles'][:,4]) if base is None else np.asarray(base);y=val['raw_y']
+    # Policies are independent per variable. Slice before proposing betas instead
+    # of allocating the entire multivariate prediction table for every variable.
+    # The single-variable arithmetic and legacy policy records stay identical.
+    if len(np.unique(val['sid']))>1:
+        for sid in np.unique(val['sid']):
+            rows=np.flatnonzero(val['sid']==sid)
+            local={k:val[k][rows] for k in ['sid','start','raw_y']}
+            policies.update(calibrate(local,np.asarray(pred)[rows],base[rows]))
+        return policies
     for sid in np.unique(val['sid']):
         rows=np.flatnonzero(val['sid']==sid);rows=rows[np.argsort(val['start'][rows])];blocks=np.array_split(rows,3)
         default=dict(beta=0.,reason='no stable improvement over frozen Moirai')
