@@ -26,6 +26,12 @@ def main():
     q.add_argument('--device', default='cpu')
     q = subs.add_parser('index-b')
     for k in ('store','config','output'): q.add_argument('--'+k, required=True)
+    from .current_forecast import DATASETS
+    q = subs.add_parser('query-current', help='Restored fixed-increment 5+5 forecast (96 -> 96)')
+    q.add_argument('--dataset', required=True, choices=DATASETS)
+    for k in ('history', 'output'): q.add_argument('--'+k, required=True)
+    q.add_argument('--sid', required=True, type=int); q.add_argument('--start', required=True, type=int)
+    q.add_argument('--device', default='cuda')
     for name in ('query-a','query-b','query-a-rerank'):
         q = subs.add_parser(name)
         for k in ('store','index','history','output'): q.add_argument('--'+k, required=True)
@@ -76,6 +82,15 @@ def main():
     elif cmd=='index-b':
         from .rerank import build
         result=build(args['store'],args['config'],args['output']); print(dict(series=len(result['series'])))
+    elif cmd=='query-current':
+        import numpy as np
+        from .current_forecast import CurrentPredictor
+        if Path(args['output']).exists(): raise FileExistsError('Choose a fresh query output')
+        with CurrentPredictor(args['dataset'], args['device']) as engine:
+            result = engine.predict(np.load(args['history'], allow_pickle=False), args['sid'], args['start'])
+        write_json(args['output'], serializable(result))
+        print(json.dumps(dict(primary=result['primary'], retrieved_cases=result['retrieved_cases'],
+                              used_cases=result['used_cases'], length=96, horizon=96), indent=2))
     elif cmd.startswith('query-'):
         import numpy as np
         if Path(args['output']).exists(): raise FileExistsError('Choose a fresh query output')
